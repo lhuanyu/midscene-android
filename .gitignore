@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+packages/*/dist/
+**/.rslib/
+coverage/
+test-results/
+
+# Android host: build output and machine-local state
+apps/android-host/app/build/
+apps/android-host/build/
+apps/android-host/.gradle/
+apps/android-host/.kotlin/
+apps/android-host/.cache/
+apps/android-host/dist/
+apps/android-host/local.properties
+apps/android-host/local-signing.properties
+
+# Android host: internal release signing key — machine-local, never committed
+apps/android-host/keystore/
+
+# Android host: generated app assets (produced by scripts/, recreated on build)
+apps/android-host/app/src/main/assets/agent-bundle.zip
+apps/android-host/app/src/main/assets/yadb
+apps/android-host/app/src/main/assets/bundle-info.txt
+
+# Personal notes and scratch space
+.local-notes/
+
+# Run artefacts
+midscene_run/
+
+# OS
+.DS_Store

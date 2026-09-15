@@ -1,0 +1,156 @@
+name: Release
+
+# Manual trigger only: publishing is a deliberate act. `pnpm version` + tag is
+# still the source of truth for the version that ships.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and verify, but do not publish to npm or create a release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publish package and attach the signed APK
+    runs-on: ubuntu-22.04
+    permissions:
+      # Needed to create the GitHub Release that carries the APK.
+      contents: write
+      # Needed for npm provenance (OIDC).
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
+        with:
+          version: 9.3.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.13.0'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup JDK 17
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          "$JAVA_HOME_17_X64/bin/java" -version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Verify release signing is configured
+        env:
+          MIDSCENE_KEYSTORE: ${{ secrets.MIDSCENE_KEYSTORE }}
+          MIDSCENE_KEYSTORE_PASSWORD: ${{ secrets.MIDSCENE_KEYSTORE_PASSWORD }}
+          MIDSCENE_KEY_ALIAS: ${{ secrets.MIDSCENE_KEY_ALIAS }}
+          MIDSCENE_KEY_PASSWORD: ${{ secrets.MIDSCENE_KEY_PASSWORD }}
+        run: |
+          missing=()
+          for name in MIDSCENE_KEYSTORE MIDSCENE_KEYSTORE_PASSWORD MIDSCENE_KEY_ALIAS MIDSCENE_KEY_PASSWORD; do
+            [[ -n "${!name}" ]] || missing+=("$name")
+          done
+          if ((${#missing[@]} > 0)); then
+            printf 'Missing release signing secrets: %s\n' "${missing[*]}" >&2
+            printf 'A community build must be verifiable; refusing to publish an unsigned APK.\n' >&2
+            exit 1
+          fi
+
+      - name: Decode the signing keystore
+        env:
+          # Base64 of the .jks, as stored in the secret.
+          MIDSCENE_KEYSTORE_BASE64: ${{ secrets.MIDSCENE_KEYSTORE }}
+        run: |
+          mkdir -p apps/android-host/keystore
+          printf '%s' "$MIDSCENE_KEYSTORE_BASE64" | base64 -d > apps/android-host/keystore/release.jks
+
+      - name: Build the release APK
+        env:
+          MIDSCENE_KEYSTORE: apps/android-host/keystore/release.jks
+          MIDSCENE_KEYSTORE_PASSWORD: ${{ secrets.MIDSCENE_KEYSTORE_PASSWORD }}
+          MIDSCENE_KEY_ALIAS: ${{ secrets.MIDSCENE_KEY_ALIAS }}
+          MIDSCENE_KEY_PASSWORD: ${{ secrets.MIDSCENE_KEY_PASSWORD }}
+        run: |
+          pnpm run build
+          pnpm --dir apps/android-host run runtime
+          pnpm --dir apps/android-host run adb-runtime
+          pnpm --dir apps/android-host run bundle
+          pnpm --dir apps/android-host run dist:release
+
+      - name: Write checksums and certificate fingerprint
+        run: |
+          cd apps/android-host/dist
+          sha256sum ./*.apk > SHA256SUMS
+          # The fingerprint is the trust anchor for a downloaded binary: it is how
+          # a user confirms the APK was signed by this project's key.
+          latest_build_tools=$(ls -d "${ANDROID_HOME}"/build-tools/* 2>/dev/null | sort -V | tail -1)
+          "${latest_build_tools}/apksigner" verify --print-certs ./*.apk \
+            > APK-CERTIFICATE.txt
+          cat SHA256SUMS
+          cat APK-CERTIFICATE.txt
+
+      - name: Write the release notes
+        run: |
+          cd apps/android-host/dist
+          {
+            echo '## Install'
+            echo
+            echo 'Download the `.apk` below, then verify it before installing — this app can operate your phone:'
+            echo
+            echo '```bash'
+            echo 'sha256sum -c SHA256SUMS'
+            echo 'apksigner verify --print-certs midscene-android-*.apk'
+            echo '```'
+            echo
+            echo 'The signing certificate must match `APK-CERTIFICATE.txt` in this release.'
+            echo
+            echo 'Requirements: **arm64**, Android 10+. Pairing over wireless debugging needs Android 11+.'
+            echo 'See the [README](../README.md) for setup, and [SECURITY.md](../SECURITY.md)'
+            echo 'for the trust model — in short, prefer the Shizuku channel.'
+            echo
+            echo '## Signing certificate'
+            echo
+            echo '```'
+            cat APK-CERTIFICATE.txt
+            echo '```'
+          } > RELEASE-NOTES.md
+
+      - name: Remove the keystore before anything else runs
+        if: always()
+        run: rm -rf apps/android-host/keystore
+
+      - name: Upload build artefacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-release
+          path: |
+            apps/android-host/dist/*.apk
+            apps/android-host/dist/SHA256SUMS
+            apps/android-host/dist/APK-CERTIFICATE.txt
+
+      - name: Publish to npm
+        if: ${{ !inputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm --filter midscene-android publish --no-git-checks --access public --provenance
+
+      - name: Create the GitHub Release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./packages/midscene-android/package.json').version")
+          gh release create "v${version}" \
+            apps/android-host/dist/*.apk \
+            apps/android-host/dist/SHA256SUMS \
+            apps/android-host/dist/APK-CERTIFICATE.txt \
+            --title "v${version}" \
+            --notes-file apps/android-host/dist/RELEASE-NOTES.md

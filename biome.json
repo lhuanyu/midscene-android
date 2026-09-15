@@ -1,0 +1,56 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
+  "organizeImports": {
+    "enabled": true
+  },
+  "files": {
+    "ignore": [
+      "apps/android-host/app/build/**",
+      "apps/android-host/build/**",
+      "apps/android-host/.gradle/**",
+      "apps/android-host/.cache/**",
+      "apps/android-host/dist/**",
+      "apps/android-host/app/src/main/assets/**",
+      "node_modules/**",
+      "**/midscene_run",
+      "**/dist",
+      "**/.rslib",
+      "dist",
+      "coverage/**",
+      "test-results/**"
+    ]
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "style": {
+        "noParameterAssign": "off",
+        "noNonNullAssertion": "off",
+        "noUselessElse": "off"
+      },
+      "complexity": {
+        "noForEach": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "off",
+        "noArrayIndexKey": "off",
+        "noImplicitAnyLet": "off"
+      }
+    }
+  },
+  "vcs": {
+    "defaultBranch": "main"
+  },
+  "formatter": {
+    "lineWidth": 80,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf"
+  }
+}

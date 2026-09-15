@@ -1,0 +1,28 @@
+{
+  "name": "midscene-android-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Community Android on-device agent for Midscene: workspace root.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lhuanyu/midscene-android.git"
+  },
+  "engines": {
+    "pnpm": ">=9.3.0",
+    "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
+  },
+  "packageManager": "pnpm@9.3.0",
+  "scripts": {
+    "build": "pnpm --filter midscene-android build",
+    "test": "pnpm --filter midscene-android test",
+    "test:android": "pnpm --filter android-host test:android",
+    "assemble": "pnpm --dir apps/android-host assemble",
+    "assemble:release": "pnpm --dir apps/android-host assemble:release",
+    "install:apk": "pnpm --filter android-host run install:apk",
+    "lint": "npx @biomejs/biome check . --diagnostic-level=info --no-errors-on-unmatched"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4"
+  }
+}
