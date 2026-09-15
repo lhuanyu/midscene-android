@@ -25,6 +25,16 @@ public class RunStore {
     /** And at most this much disk for reports, logs and results together. */
     public static final long MAX_BYTES = 300L * 1024 * 1024;
 
+    /**
+     * A task list run counts tasks; a `@midscene/test` run counts cases.
+     *
+     * Both are reported through the same two counters so the History list does
+     * not need two shapes, and {@link #KIND_TEST} tells the UI which noun to
+     * use.
+     */
+    public static final String KIND_TASKS = "tasks";
+    public static final String KIND_TEST = "test";
+
     public static final class RunRecord {
         public final String id;
         public final String configName;
@@ -37,6 +47,8 @@ public class RunStore {
         public final String resultFile;
         public final String reportFile;
         public final String logFile;
+        /** {@link #KIND_TASKS} or {@link #KIND_TEST}. */
+        public final String kind;
 
         RunRecord(JSONObject json) {
             this.id = json.optString("id");
@@ -50,6 +62,13 @@ public class RunStore {
             this.resultFile = json.optString("resultFile", "");
             this.reportFile = json.optString("reportFile", "");
             this.logFile = json.optString("logFile", "");
+            // Records written before test projects existed carry no kind.
+            this.kind = json.optString("kind", KIND_TASKS);
+        }
+
+        /** True when the counted units are test cases rather than tasks. */
+        public boolean isTestRun() {
+            return KIND_TEST.equals(kind);
         }
     }
 
@@ -133,7 +152,24 @@ public class RunStore {
         total += directoryBytes(dir);
         total += directoryBytes(new File(new File(dir.getParentFile(), "run"), "report"));
         total += directoryBytes(new File(dir.getParentFile(), "midscene_run/results"));
+        total += directoryBytes(testReportDir());
+        total += directoryBytes(testResultDir());
         return total;
+    }
+
+    /**
+     * Where a `@midscene/test` run writes, mirroring the config defaults.
+     *
+     * The unified report is one flat `.html` file per run; the summaries are one
+     * directory per run. Both live outside `runs/` and `run/report`, so before
+     * this they counted towards neither the storage total nor the orphan sweep.
+     */
+    private File testReportDir() {
+        return new File(dir.getParentFile(), "midscene_run/report");
+    }
+
+    private File testResultDir() {
+        return new File(dir.getParentFile(), "midscene_run/test-results");
     }
 
     private long directoryBytes(File directory) {
@@ -156,7 +192,14 @@ public class RunStore {
                 referenced.add(new File(record.reportFile).getName());
             }
             if (!record.resultFile.isEmpty()) {
-                referenced.add(new File(record.resultFile).getName());
+                File result = new File(record.resultFile);
+                referenced.add(result.getName());
+                // A test run keeps its summary in a per-run directory, so the
+                // directory name is what the sweep has to recognise.
+                File parent = result.getParentFile();
+                if (parent != null && parent.getName() != null) {
+                    referenced.add(parent.getName());
+                }
             }
             referenced.add(record.id + ".log");
             referenced.add(record.id + ".json");
@@ -164,6 +207,26 @@ public class RunStore {
 
         removeUnreferencedFiles(new File(new File(dir.getParentFile(), "run"), "report"), referenced);
         removeUnreferencedFiles(new File(dir.getParentFile(), "midscene_run/results"), referenced);
+        removeUnreferencedFiles(testReportDir(), referenced);
+        removeUnreferencedDirs(testResultDir(), referenced);
+    }
+
+    /** A test run's summary sits in `<resultDir>/<runId>/summary.json`. */
+    private void removeUnreferencedDirs(File directory, java.util.Set<String> referenced) {
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            if (!file.isDirectory()) {
+                continue;
+            }
+            boolean kept = referenced.contains(file.getName())
+                    || referenced.contains(file.getName() + "/summary.json");
+            if (!kept) {
+                deleteQuietly(file);
+            }
+        }
     }
 
     private void removeUnreferencedFiles(File directory, java.util.Set<String> referenced) {
@@ -206,7 +269,14 @@ public class RunStore {
         deleteQuietly(new File(dir, record.id + ".json"));
         deleteQuietly(new File(dir, record.id + ".log"));
         if (!record.resultFile.isEmpty()) {
-            deleteQuietly(new File(record.resultFile));
+            File result = new File(record.resultFile);
+            deleteQuietly(result);
+            // A test run's summary lives in a directory of its own, so the
+            // directory has to go with it or a deleted run leaves a husk behind.
+            File parent = result.getParentFile();
+            if (parent != null && testResultDir().equals(parent.getParentFile())) {
+                deleteQuietly(parent);
+            }
         }
         if (!record.reportFile.isEmpty()) {
             deleteQuietly(new File(record.reportFile));
@@ -215,12 +285,24 @@ public class RunStore {
 
     private void deleteQuietly(File file) {
         try {
-            if (file.isFile()) {
+            if (file.isDirectory()) {
+                deleteTree(file);
+            } else if (file.isFile()) {
                 file.delete();
             }
         } catch (Exception ignored) {
             // best effort
         }
+    }
+
+    private void deleteTree(File directory) {
+        File[] files = directory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                deleteQuietly(file);
+            }
+        }
+        directory.delete();
     }
 
     public synchronized List<RunRecord> list() {

@@ -492,18 +492,40 @@ public class AgentService extends Service {
         JSONObject summary = summarize(result, configFile.getAbsolutePath());
         JSONObject record = new JSONObject();
         try {
+            boolean testRun = isTestResult(summary);
             record.put("id", id);
             record.put("configName", summary.optString("name", "run"));
             record.put("startedAt", startedAt);
             record.put("durationMs", result.durationMs);
-            record.put("ok", !stopRequested && summary.optBoolean("ok", false));
-            record.put("exitCode", stopRequested ? -1 : result.exitCode);
-            JSONArray tasks = summary.optJSONArray("tasks");
-            record.put("taskCount", tasks == null ? 0 : tasks.length());
-            record.put("failedTasks", countFailed(tasks));
-            record.put("resultFile", summary.optString("resultFile", ""));
-            record.put("reportFile", summary.optString("reportFile", ""));
             record.put("logFile", logFile.getAbsolutePath());
+            record.put("kind", testRun ? RunStore.KIND_TEST : RunStore.KIND_TASKS);
+
+            if (testRun) {
+                // One case is the unit, so it fills the same two counters as a
+                // task list. A case that never ran, or a document that failed to
+                // parse, is a failure: the run did not produce a result for it.
+                JSONObject cases = summary.optJSONObject("summary");
+                record.put("ok", !stopRequested && "success".equals(summary.optString("status")));
+                record.put("taskCount", cases == null ? 0 : cases.optInt("total", 0));
+                record.put("failedTasks", cases == null ? 0
+                        : cases.optInt("failed", 0)
+                                + cases.optInt("notRun", 0)
+                                + cases.optInt("collectionErrors", 0)
+                                + cases.optInt("documentFailures", 0));
+                // The test runner returns where it wrote its artefacts rather
+                // than relying on a scanned directory.
+                record.put("resultFile", summary.optString("summaryPath", ""));
+                record.put("reportFile", summary.optString("reportPath", ""));
+            } else {
+                record.put("ok", !stopRequested && summary.optBoolean("ok", false));
+                JSONArray tasks = summary.optJSONArray("tasks");
+                record.put("taskCount", tasks == null ? 0 : tasks.length());
+                record.put("failedTasks", countFailed(tasks));
+                record.put("resultFile", summary.optString("resultFile", ""));
+                record.put("reportFile", summary.optString("reportFile", ""));
+            }
+
+            record.put("exitCode", stopRequested ? -1 : result.exitCode);
         } catch (JSONException error) {
             emit("could not build history record: " + error.getMessage());
         }
@@ -534,7 +556,11 @@ public class AgentService extends Service {
      * nested objects also start with "{": searching for the last brace (or the last
      * "{\n") finds a nested object, which is why successful runs were recorded as
      * failures without a report. Candidate roots are tried from the top instead, and
-     * only an object carrying a "tasks" array is accepted.
+     * only an object that looks like a run result is accepted.
+     *
+     * There are two shapes: a task run carries a "tasks" array, a
+     * {@code @midscene/test} run carries "runId"/"status"/"summary". The CLI picks
+     * which one to execute from the config, so this has to accept both.
      */
     private JSONObject summarize(ShellRunner.Result result, String configPath) {
         String[] lines = result.output.split("\r?\n");
@@ -542,7 +568,7 @@ public class AgentService extends Service {
         // Single-line result (compact JSON somewhere in the output).
         for (int index = lines.length - 1; index >= 0; index--) {
             String line = lines[index].trim();
-            if (!line.startsWith("{") || !line.contains("\"tasks\"")) {
+            if (!line.startsWith("{") || !isRunResult(line)) {
                 continue;
             }
             try {
@@ -564,7 +590,7 @@ public class AgentService extends Service {
                 candidate.append(lines[rest]).append('\n');
             }
             String text = candidate.toString();
-            if (!text.contains("\"tasks\"")) {
+            if (!isRunResult(text)) {
                 continue;
             }
             try {
@@ -582,6 +608,27 @@ public class AgentService extends Service {
             // never happens for string and boolean values
         }
         return fallback;
+    }
+
+    /**
+     * Does this text look like the runner's result object?
+     *
+     * Matching on a marker is unavoidable: the result is embedded in a stream of
+     * log lines. The markers are the arrays and scalars that only a result has,
+     * so a log line that happens to be JSON does not match.
+     */
+    private static boolean isRunResult(String text) {
+        if (text.contains("\"tasks\"")) {
+            return true;
+        }
+        return text.contains("\"runId\"")
+                && text.contains("\"status\"")
+                && text.contains("\"summary\"");
+    }
+
+    /** True when the parsed result came from a {@code @midscene/test} project. */
+    private static boolean isTestResult(JSONObject summary) {
+        return summary.has("runId") && summary.has("summary") && !summary.has("tasks");
     }
 
     private int countFailed(JSONArray tasks) {

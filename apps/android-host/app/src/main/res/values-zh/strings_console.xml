@@ -44,9 +44,14 @@
         <item quantity="other">%1$s · %2$ds · %3$d/%4$d 个任务</item>
     </plurals>
 
+    <!-- 同上，用于 @midscene/test 运行：单位是用例。 -->
+    <plurals name="run_summary_cases">
+        <item quantity="other">%1$s · %2$ds · %3$d/%4$d 个用例</item>
+    </plurals>
+
     <!-- 脚本 -->
     <string name="scripts_busy_hint">运行中，脚本在结束前不可编辑</string>
-    <string name="scripts_idle_hint">编辑 config.yaml 依次执行任务</string>
+    <string name="scripts_idle_hint">编辑 config.yaml 执行其中的任务，或运行 @midscene/test 项目</string>
     <string name="scripts_editor">脚本编辑器</string>
     <string name="scripts_status_saved">已保存</string>
     <string name="scripts_status_self_check">自检运行中</string>
@@ -86,6 +91,10 @@
     <!-- 运行卡片摘要：%1$s 相对时间 · %2$d 耗时 · %3$d 已完成 / %4$d 总数。 -->
     <plurals name="history_card_summary">
         <item quantity="other">%1$s · %2$ds · %3$d/%4$d 个任务</item>
+    </plurals>
+
+    <plurals name="history_card_summary_cases">
+        <item quantity="other">%1$s · %2$ds · %3$d/%4$d 个用例</item>
     </plurals>
 
     <!-- 诊断 -->

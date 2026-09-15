@@ -45,9 +45,15 @@
         <item quantity="other">%1$s · %2$ds · %3$d/%4$d tasks</item>
     </plurals>
 
+    <!-- Same shape, for a @midscene/test run, which counts cases. -->
+    <plurals name="run_summary_cases">
+        <item quantity="one">%1$s · %2$ds · %3$d/%4$d case</item>
+        <item quantity="other">%1$s · %2$ds · %3$d/%4$d cases</item>
+    </plurals>
+
     <!-- Scripts -->
     <string name="scripts_busy_hint">Running — the script is locked until it ends</string>
-    <string name="scripts_idle_hint">Edit config.yaml to run tasks in order</string>
+    <string name="scripts_idle_hint">Edit config.yaml to run its tasks, or a @midscene/test project</string>
     <string name="scripts_editor">Script editor</string>
     <string name="scripts_status_saved">saved</string>
     <string name="scripts_status_self_check">self-check running</string>
@@ -90,6 +96,11 @@
     <plurals name="history_card_summary">
         <item quantity="one">%1$s · %2$ds · %3$d/%4$d task</item>
         <item quantity="other">%1$s · %2$ds · %3$d/%4$d tasks</item>
+    </plurals>
+
+    <plurals name="history_card_summary_cases">
+        <item quantity="one">%1$s · %2$ds · %3$d/%4$d case</item>
+        <item quantity="other">%1$s · %2$ds · %3$d/%4$d cases</item>
     </plurals>
 
     <!-- Diagnostics -->

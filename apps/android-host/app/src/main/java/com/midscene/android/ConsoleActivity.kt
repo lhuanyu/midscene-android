@@ -878,7 +878,7 @@ private fun LastRunCard(record: RunStore.RunRecord, onOpen: (String, Boolean) ->
                 )
                 Text(
                     pluralStringResource(
-                        R.plurals.run_summary,
+                        if (record.isTestRun()) R.plurals.run_summary_cases else R.plurals.run_summary,
                         record.taskCount,
                         SimpleDateFormat("HH:mm", Locale.US).format(Date(record.startedAt)),
                         record.durationMs / 1000,
@@ -1404,7 +1404,7 @@ private fun RunCard(
                 Spacer(Modifier.height(3.dp))
                 Text(
                     pluralStringResource(
-                        R.plurals.history_card_summary,
+                        if (record.isTestRun()) R.plurals.history_card_summary_cases else R.plurals.history_card_summary,
                         record.taskCount,
                         relativeTime(record.startedAt),
                         record.durationMs / 1000,
