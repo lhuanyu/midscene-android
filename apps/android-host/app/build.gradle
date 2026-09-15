@@ -89,9 +89,12 @@ android {
         applicationId 'com.midscene.android'
         minSdk 29
         targetSdk 34
-        // 1.0.0 -> 10000: an update has to carry a code the phone can compare.
-        versionCode 10000
-        versionName '1.0.0'
+        // A release is major*10000 + minor*100 + patch, so 1.0.0 is 10000. A
+        // prerelease has to sit *below* the release it precedes, or a device
+        // running the candidate could not take the final build as an update;
+        // 9990 + rcNumber leaves room for a few more candidates.
+        versionCode 9991
+        versionName '1.0.0-rc.1'
         // Read by the About page; the same two values name the packaged APK.
         buildConfigField 'int', 'BUILD_NUMBER', "${gitBuildNumber}"
         buildConfigField 'String', 'BUILD_TIME', "\"${buildTimeText}\""

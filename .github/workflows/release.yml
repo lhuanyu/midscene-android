@@ -152,12 +152,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version=$(node -p "require('./packages/android-local/package.json').version")
+          # `1.0.0-rc.1` is a candidate, not the release. Without this it would
+          # become the repository's "Latest" release and the download everyone
+          # is pointed at.
+          prerelease=()
+          if [[ "$version" == *-* ]]; then
+            prerelease=(--prerelease)
+          fi
           gh release create "v${version}" \
             apps/android-host/dist/*.apk \
             apps/android-host/dist/SHA256SUMS \
             apps/android-host/dist/APK-CERTIFICATE.txt \
             --title "v${version}" \
             --target "$GITHUB_SHA" \
+            "${prerelease[@]}" \
             --notes-file apps/android-host/dist/RELEASE-NOTES.md
 
       - name: Publish to npm
@@ -169,4 +177,12 @@ jobs:
             echo "::warning::NPM_TOKEN is not configured, so the npm publish was skipped. The GitHub Release above is complete. Add the secret and re-run this workflow to publish the package."
             exit 0
           fi
-          pnpm --filter midscene-android publish --no-git-checks --access public --provenance
+          version=$(node -p "require('./packages/android-local/package.json').version")
+          # npm publishes under `latest` unless told otherwise, whatever the
+          # version says — so an `-rc.N` would become what `npm install
+          # midscene-android` gives everyone. Candidates go to the `next` tag.
+          tag=()
+          if [[ "$version" == *-* ]]; then
+            tag=(--tag next)
+          fi
+          pnpm --filter midscene-android publish --no-git-checks --access public --provenance "${tag[@]}"
