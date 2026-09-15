@@ -74,7 +74,9 @@ jobs:
 
       - name: Build the release APK
         env:
-          MIDSCENE_KEYSTORE: apps/android-host/keystore/release.jks
+          # Absolute on purpose: Gradle resolves a relative MIDSCENE_KEYSTORE
+          # against apps/android-host (the Gradle root), not the repository root.
+          MIDSCENE_KEYSTORE: ${{ github.workspace }}/apps/android-host/keystore/release.jks
           MIDSCENE_KEYSTORE_PASSWORD: ${{ secrets.MIDSCENE_KEYSTORE_PASSWORD }}
           MIDSCENE_KEY_ALIAS: ${{ secrets.MIDSCENE_KEY_ALIAS }}
           MIDSCENE_KEY_PASSWORD: ${{ secrets.MIDSCENE_KEY_PASSWORD }}
