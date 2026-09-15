@@ -513,7 +513,12 @@ private fun RunScreen(
         ModelEnvFile.missingKeys(ShellRunner.readText(File(context.filesDir, "model.env")))
     }
     val modelReady = missing.isEmpty()
-    val runtimeReady = remember { Provisioner.runtimeInstalled(context) }
+    // Keyed on `busy` on purpose. `Install` on this page provisions in the
+    // background and stays on this page, so a `remember` with no keys kept
+    // reporting "not installed" after a successful install — the banner only
+    // went away once the page was left and re-entered. `busy` flips back when
+    // the service run finishes, which is exactly when the answer can change.
+    val runtimeReady = remember(busy) { Provisioner.runtimeInstalled(context) }
 
     DisposableEffect(Unit) {
         val listener = AgentService.LogListener { _ ->
