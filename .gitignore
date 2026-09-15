@@ -7,6 +7,10 @@ packages/*/dist/
 coverage/
 test-results/
 
+# TypeScript incremental build state: regenerated on every build, and noise in
+# every diff otherwise.
+*.tsbuildinfo
+
 # Android host: build output and machine-local state
 apps/android-host/app/build/
 apps/android-host/build/
