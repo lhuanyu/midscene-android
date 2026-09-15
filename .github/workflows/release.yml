@@ -136,21 +136,25 @@ jobs:
             apps/android-host/dist/SHA256SUMS
             apps/android-host/dist/APK-CERTIFICATE.txt
 
-      - name: Publish to npm
-        if: ${{ !inputs.dry_run }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm --filter midscene-android publish --no-git-checks --access public --provenance
-
+      # The GitHub Release is created *before* the npm publish on purpose. An npm
+      # publish cannot be meaningfully withdrawn, so the artifact users verify has
+      # to exist first: if this step fails, nothing has been published anywhere.
       - name: Create the GitHub Release
         if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          version=$(node -p "require('./packages/midscene-android/package.json').version")
+          version=$(node -p "require('./packages/android-local/package.json').version")
           gh release create "v${version}" \
             apps/android-host/dist/*.apk \
             apps/android-host/dist/SHA256SUMS \
             apps/android-host/dist/APK-CERTIFICATE.txt \
             --title "v${version}" \
+            --target "$GITHUB_SHA" \
             --notes-file apps/android-host/dist/RELEASE-NOTES.md
+
+      - name: Publish to npm
+        if: ${{ !inputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm --filter midscene-android publish --no-git-checks --access public --provenance
