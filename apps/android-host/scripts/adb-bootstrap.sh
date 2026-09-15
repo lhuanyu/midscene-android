@@ -59,10 +59,12 @@ fi
 
 say "start shizuku server"
 SHIZUKU_PATH="$(sh_ dumpsys package "$SHIZUKU_PKG" | grep -m1 codePath | sed 's/.*codePath=//' | tr -d '\r')"
+SHIZUKU_RUNNING=0
 if [[ -z "$SHIZUKU_PATH" ]]; then
   echo "Shizuku is not installed; pass --shizuku-apk" >&2
 else
   sh_ "exec ${SHIZUKU_PATH}/lib/arm64/libshizuku.so" | tail -2
+  SHIZUKU_RUNNING=1
 fi
 
 # The app's private directories only exist once it has run at least once.
@@ -93,8 +95,46 @@ sh_ "pm grant ${PKG} android.permission.POST_NOTIFICATIONS" 2>/dev/null || true
 # of answering its prompt.
 if sh_ "pm grant ${PKG} moe.shizuku.manager.permission.API_V23" 2>/dev/null; then
   echo "Shizuku API permission granted over adb"
+  # The server caches each client's permission state when it starts, and it was
+  # started above — before this grant existed. On a fresh install it therefore
+  # keeps answering "not authorized in Shizuku ... peek status -92" and
+  # provisioning fails until something restarts it. Restart it here so the
+  # documented one-command setup actually is one command.
+  if [[ "$SHIZUKU_RUNNING" == "1" ]]; then
+    say "restart shizuku so it sees the grant"
+    sh_ "pkill -f shizuku_server" >/dev/null 2>&1 || true
+    sleep 2
+    sh_ "exec ${SHIZUKU_PATH}/lib/arm64/libshizuku.so" | tail -1
+  fi
 else
   echo "warning: could not grant the Shizuku permission; tap 'Authorize Shizuku' in Setup" >&2
+fi
+
+say "select the shizuku channel"
+# A fresh install defaults to the device's own adb channel, which needs
+# wireless-debugging pairing and is therefore not ready, so provisioning fails
+# with "local adb · not paired yet" even though Shizuku was just authorized.
+# This script's whole job is to get a device working without a human, and it has
+# just done the Shizuku half, so select that channel.
+#
+# The file is the one the console itself writes. The app must not be running or
+# it would overwrite this from memory on exit, hence the force-stop; the console
+# is started further down, after this.
+if [[ "$SHIZUKU_RUNNING" == "1" ]]; then
+  sh_ "am force-stop ${PKG}" >/dev/null 2>&1 || true
+  sh_ "run-as ${PKG} mkdir -p shared_prefs"
+  channel_xml="$(mktemp)"
+  cat > "$channel_xml" <<'XML'
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <string name="execChannel">shizuku</string>
+</map>
+XML
+  "${ADB[@]}" push "$channel_xml" /data/local/tmp/midscene-ui.xml >/dev/null
+  rm -f "$channel_xml"
+  sh_ "run-as ${PKG} cp /data/local/tmp/midscene-ui.xml shared_prefs/midscene-ui.xml"
+  sh_ 'rm -f /data/local/tmp/midscene-ui.xml'
+  echo "channel set to shizuku"
 fi
 
 say "provision runtime (bundle + yadb) through the service"
