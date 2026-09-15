@@ -24,5 +24,11 @@
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "js-yaml": "4.3.2",
+      "uuid": "11.1.1"
+    }
   }
 }
