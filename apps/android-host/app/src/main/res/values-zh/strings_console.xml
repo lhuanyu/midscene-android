@@ -267,28 +267,19 @@
     <string name="about_app_name">Midscene Android</string>
     <string name="about_title">关于</string>
     <string name="about_version_line">版本 %1$s · build %2$d</string>
-    <string name="about_build">构建信息</string>
+    <string name="about_build">本次构建</string>
     <string name="about_version">版本</string>
     <string name="about_build_time">构建时间</string>
-    <string name="about_build_type">构建类型</string>
     <string name="about_build_debug">调试构建</string>
     <string name="about_build_release">正式构建</string>
-    <string name="about_package">包名</string>
-    <string name="about_runtime">运行环境</string>
     <string name="about_runtime_state">Agent 运行环境</string>
     <string name="about_runtime_installed">已安装</string>
     <string name="about_runtime_missing">未安装</string>
-    <string name="about_bundle">Agent 包</string>
     <string name="about_channel">执行通道</string>
-    <string name="about_device">设备</string>
-    <string name="about_device_model">型号</string>
-    <string name="about_android">Android</string>
-    <string name="about_android_version">%1$s（API %2$d）</string>
-    <string name="about_abi">ABI</string>
     <string name="about_project">项目</string>
-    <string name="about_homepage">项目主页</string>
-    <string name="about_copy">复制版本信息</string>
-    <string name="about_copied">版本信息已复制</string>
-    <string name="about_unknown">未知</string>
+    <string name="about_source">源码仓库</string>
+    <string name="about_framework">基于</string>
+    <string name="about_copy">复制诊断信息</string>
+    <string name="about_copied">诊断信息已复制</string>
 
 </resources>

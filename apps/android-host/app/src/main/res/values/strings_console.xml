@@ -261,29 +261,20 @@
     <string name="about_app_name">Midscene Android</string>
     <string name="about_title">About</string>
     <string name="about_version_line">version %1$s · build %2$d</string>
-    <string name="about_build">BUILD</string>
+    <string name="about_build">THIS BUILD</string>
     <string name="about_version">Version</string>
     <string name="about_build_time">Built</string>
-    <string name="about_build_type">Build type</string>
     <string name="about_build_debug">Debug</string>
     <string name="about_build_release">Release</string>
-    <string name="about_package">Package</string>
-    <string name="about_runtime">AGENT RUNTIME</string>
     <string name="about_runtime_state">Agent runtime</string>
     <string name="about_runtime_installed">Installed</string>
     <string name="about_runtime_missing">Not installed</string>
-    <string name="about_bundle">Agent bundle</string>
     <string name="about_channel">Shell channel</string>
-    <string name="about_device">DEVICE</string>
-    <string name="about_device_model">Model</string>
-    <string name="about_android">Android</string>
-    <string name="about_android_version">%1$s (API %2$d)</string>
-    <string name="about_abi">ABI</string>
     <string name="about_project">PROJECT</string>
-    <string name="about_homepage">Homepage</string>
-    <string name="about_copy">Copy version info</string>
-    <string name="about_copied">Version info copied</string>
-    <string name="about_unknown">unknown</string>
+    <string name="about_source">Source</string>
+    <string name="about_framework">Built on</string>
+    <string name="about_copy">Copy diagnostics</string>
+    <string name="about_copied">Diagnostics copied</string>
 
     <!-- Report viewer: shared by the History pane and ReportViewerActivity -->
     <string name="report_viewer_rendering">Rendering report…</string>

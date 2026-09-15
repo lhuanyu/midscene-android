@@ -2167,27 +2167,24 @@ private fun AboutScreen() {
             R.string.channel_this_device
         },
     )
-    // Not named `android`: that shadows the package for every line below it.
-    val androidVersion = stringResource(
-        R.string.about_android_version,
-        android.os.Build.VERSION.RELEASE,
-        android.os.Build.VERSION.SDK_INT,
-    )
-    val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull()
-        ?: stringResource(R.string.about_unknown)
+    val buildTime = BuildConfig.BUILD_TIME
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        Text(
+            stringResource(R.string.about_app_name),
+            style = MaterialTheme.typography.titleLarge,
+        )
+
         DiagnosticsCard(stringResource(R.string.about_build)) {
             AboutRow(stringResource(R.string.about_version), versionLine)
-            AboutRow(stringResource(R.string.about_build_time), BuildConfig.BUILD_TIME)
-            AboutRow(stringResource(R.string.about_build_type), buildType)
-            AboutRow(stringResource(R.string.about_package), context.packageName)
-        }
-
-        DiagnosticsCard(stringResource(R.string.about_runtime)) {
+            AboutRow(
+                stringResource(R.string.about_build_time),
+                "$buildTime · $buildType",
+            )
+            AboutRow(stringResource(R.string.about_channel), channel)
             AboutRow(
                 stringResource(R.string.about_runtime_state),
                 stringResource(
@@ -2196,35 +2193,17 @@ private fun AboutScreen() {
                 ),
                 ready = runtimeInstalled,
             )
-            AboutRow(
-                stringResource(R.string.about_bundle),
-                bundle.ifEmpty { stringResource(R.string.about_unknown) },
-            )
-            AboutRow(stringResource(R.string.about_channel), channel)
         }
 
-        DiagnosticsCard(stringResource(R.string.about_device)) {
-            AboutRow(stringResource(R.string.about_device_model), android.os.Build.MODEL)
-            AboutRow(stringResource(R.string.about_android), androidVersion)
-            AboutRow(stringResource(R.string.about_abi), abi)
-        }
-
+        // The whole device/runtime dump that used to be three cards is still in
+        // the copy button below, which is where a bug report needs it. On screen
+        // it was a wall of text nobody reads.
         DiagnosticsCard(stringResource(R.string.about_project)) {
-            Row(
-                Modifier.fillMaxWidth().clickable { openHomepage(context) }
-                    .padding(vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.about_homepage),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    HOMEPAGE,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MidsceneColors.Brand,
-                )
+            AboutLinkRow(stringResource(R.string.about_source), SOURCE_URL) {
+                openUrl(context, SOURCE_URL)
+            }
+            AboutLinkRow(stringResource(R.string.about_framework), FRAMEWORK_URL) {
+                openUrl(context, FRAMEWORK_URL)
             }
             Spacer(Modifier.height(8.dp))
             ActionRow(
@@ -2236,12 +2215,13 @@ private fun AboutScreen() {
                             listOf(
                                 "${context.getString(R.string.about_app_name)} "
                                         + "${BuildConfig.VERSION_NAME} (build ${BuildConfig.BUILD_NUMBER})",
-                                "built ${BuildConfig.BUILD_TIME} ($buildType)",
+                                "built $buildTime ($buildType)",
                                 "package ${context.packageName}",
                                 "android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
-                                "device ${android.os.Build.MODEL} · $abi",
+                                "device ${android.os.Build.MODEL} · ${android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"}",
                                 "runtime $runtimeText · bundle $bundle",
                                 "channel ${ActiveExec.channel(context)}",
+                                "source $SOURCE_URL",
                             ).joinToString("\n"),
                         ),
                     )
@@ -2279,15 +2259,39 @@ private fun AboutRow(label: String, value: String, ready: Boolean? = null) {
     }
 }
 
-private const val HOMEPAGE = "midscenejs.com"
+/** This project. Distinct from [FRAMEWORK_URL], which is what it builds on. */
+private const val SOURCE_URL = "github.com/lhuanyu/midscene-android"
 
-private fun openHomepage(context: android.content.Context) {
+/** Upstream Midscene: the agent framework and model adapters, not this app. */
+private const val FRAMEWORK_URL = "midscenejs.com"
+
+private fun openUrl(context: android.content.Context, url: String) {
     try {
         context.startActivity(
-            Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://$HOMEPAGE")),
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://$url")),
         )
     } catch (error: Exception) {
-        Toast.makeText(context, HOMEPAGE, Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, url, Toast.LENGTH_SHORT).show()
+    }
+}
+
+/** A row whose value is the link: tapping anywhere on it opens the URL. */
+@Composable
+private fun AboutLinkRow(label: String, value: String, onOpen: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable { onOpen() }.padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MidsceneColors.Brand,
+        )
     }
 }
 
