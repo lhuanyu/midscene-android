@@ -132,6 +132,31 @@ The `yadb` helper (CJK text input and pinch gestures) is a third-party prebuilt
 binary that ships as an app asset. Its upstream licence and provenance still need
 to be documented before the first public release.
 
+### 6. A YAML test file can run shell commands, if you let it (opt-in)
+
+`@midscene/test` projects run YAML files, and one of the available steps,
+`runAdbShell`, executes an arbitrary shell command as the shell user. That is a
+strictly larger capability than operating the UI: it can read the device, change
+settings, and reach other apps' data.
+
+**Status: off by default, off in the shipped examples, and gated separately.**
+- The step is registered **only** when `test.runAdbShell` is true. While it is
+  off the node does not exist, so a case that uses it fails to collect and names
+  the unknown node — it does not silently skip.
+- The switch is **separate** from `device.exposeRunAdbShellAction`, which gates
+  the same capability for the *model*. Enabling either never enables the other.
+- Every run with it enabled prints a warning.
+
+**Why the separation matters:** a YAML file is usually someone else's suite,
+checked into a repository and executed unattended. That is a different trust
+decision from "may the model, right now, run a command", and collapsing the two
+would mean that running a downloaded test project silently widened what the
+model could do — or the reverse.
+
+**If you enable it:** treat the test project as code you trust, the same as any
+script you would run on the device. Prefer a config without it, and leave it off
+unless a case genuinely needs a shell.
+
 ## Security-relevant design commitments
 
 These are design constraints; feature requests that violate them will not be accepted:
