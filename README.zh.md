@@ -60,10 +60,57 @@ apksigner verify --print-certs midscene-android-*.apk
 
 ## 首次运行
 
-1. 打开 Midscene，跟着设置页配置 shell 通道（见下）
-2. 在 **Settings** 里填模型 Base URL、API Key 和模型名
-3. 在 **Run** 里输入一句指令 —— 或者打开 **Scripts** 编辑并运行 YAML 配置
-4. 在 **History** 里查看报告和日志（最多保留 50 次运行 / 300 MB）
+<p align="center">
+  <img src="docs/images/setup-zh-1.png" width="300" alt="设置第 1 步：选择 shell 通道；第 2 步：填写模型配置">
+  <img src="docs/images/setup-zh-2.png" width="300" alt="设置第 3 到 5 步：悬浮窗权限、电池优化白名单、安装运行环境">
+</p>
+
+打开 Midscene 会看到五步引导，每完成一步就会打上勾：
+
+1. **让 Midscene 控制设备** —— 选择 shell 通道（见下）。用 Shizuku 的话，这里会确认授权状态。
+2. **填写模型配置** —— Base URL、API Key、模型名和模型家族。
+   「测试连接」会让端点回一个单词，所以 key 或模型名写错会**在这里**失败，而不是跑到一半才炸。
+3. **允许显示进度悬浮窗** —— 就是显示 Agent 在做什么的胶囊。截图时它会自动隐藏，**不会进报告**。
+4. **让长任务持续运行** —— 加入电池优化白名单，息屏后任务也能跑完。
+5. **安装 Agent 运行环境** —— 把 Node、Agent 和输入辅助程序解压到设备上。**不需要联网**，全部在 APK 里。
+
+引导全部完成后会自动消失，页面改显示指令输入框和最近一次运行。之后：
+
+- 在 **Run** 里输入一句指令 —— 或者打开 **Scripts** 编辑并运行 YAML 配置
+- 在 **History** 里查看报告和日志（最多保留 50 次运行 / 300 MB）
+
+凭据保存在应用私有目录，运行时才注入 Agent 进程；**不会**写进脚本或报告。
+
+### 四个字段之外
+
+表单覆盖的是 Agent 跑不起来就缺不了的项。除此之外 **Midscene 从环境变量读的
+任何设置都可用**，因为凭据文件是整份传给 Agent 进程的。把凭据页切成
+**「.env 模式」**可以直接编辑；留在表单模式则用 **「粘贴 .env」** 合并一段进去
+—— 没提到的键原样保留。
+
+```bash
+# 一次 aiAct 最多重规划几轮（默认 20）
+MIDSCENE_REPLANNING_CYCLE_LIMIT=40
+
+# 单次请求超时、重试、采样
+MIDSCENE_MODEL_TIMEOUT=120000
+MIDSCENE_MODEL_RETRY_COUNT=3
+MIDSCENE_MODEL_TEMPERATURE=0
+
+# 给「看懂屏幕」和「规划下一步」配各自的模型
+MIDSCENE_INSIGHT_MODEL_NAME=...
+MIDSCENE_PLANNING_MODEL_NAME=...
+```
+
+依赖某个变量之前，有两点要知道：
+
+- **只有 Midscene 认识的变量名才生效**。不认识的会被注入进程然后**静默忽略** ——
+  拼错一个字母和没写是一样的。
+- **不是数字的值会静默回落默认值**，不报错。所以 `=abc` 同样是静默的。
+
+完整清单就是 [Midscene 文档](https://midscenejs.com/zh/model-common-config.html)
+里的 `MIDSCENE_*`；本项目没有自创任何变量名。把粘贴的 `.env` 当作代码看待：
+它会被原样传给 Agent 进程，**只粘贴你自己写的**。
 
 ## Shell 通道
 

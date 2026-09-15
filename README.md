@@ -64,10 +64,70 @@ wireless debugging needs Android 11+.
 
 ## First run
 
-1. Open Midscene and follow the setup screen to configure a shell channel (see below)
-2. In **Settings**, set the model Base URL, API Key and model name
-3. In **Run**, type an instruction — or open **Scripts** to edit and run a YAML config
-4. In **History**, inspect reports and logs (up to 50 runs / 300 MB are retained)
+<p align="center">
+  <img src="docs/images/setup-en-1.png" width="300" alt="Setup step 1: choose a shell channel, and step 2: fill in the model credentials">
+  <img src="docs/images/setup-en-2.png" width="300" alt="Setup steps 3 to 5: overlay permission, battery exemption, and the agent runtime">
+</p>
+
+Midscene opens on a five-step guide and ticks each step off as it is satisfied:
+
+1. **Let Midscene control the device** — pick a shell channel (see below). With
+   Shizuku, this is where the authorization is confirmed.
+2. **Fill in the model credentials** — Base URL, API Key, model name and family.
+   `Test connection` asks the endpoint for a one-word answer, so a wrong key or
+   model name fails here rather than in the middle of a run.
+3. **Allow the progress bubble** — the floating pill that shows what the agent is
+   doing. It hides itself while a screenshot is taken, so it never appears in a
+   report.
+4. **Keep long tasks alive** — exempts the app from battery optimisation, so a run
+   survives the screen going off.
+5. **Install the agent runtime** — unpacks Node, the agent and the input helper
+   onto the device. Needs no network of its own; everything is in the APK.
+
+Once the guide is complete it disappears, and the page shows the instruction box
+and the last run instead. Then:
+
+- In **Run**, type an instruction — or open **Scripts** to edit and run a YAML
+  config
+- In **History**, inspect reports and logs (up to 50 runs / 300 MB are retained)
+
+The credentials live in the app's private storage and are injected into the agent
+process at run time; they are never written into a script or a report.
+
+### Beyond the four fields
+
+The form covers what the agent cannot run without. Everything else Midscene
+reads from the environment works too, because the credential file is passed to
+the agent process whole. Switch the credentials screen to **`.env` style** to
+edit it directly, or stay in the form and use **Paste env** to merge a block in
+— keys it does not mention are left alone.
+
+```bash
+# How many replanning rounds an `aiAct` may take before it gives up (default 20)
+MIDSCENE_REPLANNING_CYCLE_LIMIT=40
+
+# Per-request timeout, retries, sampling
+MIDSCENE_MODEL_TIMEOUT=120000
+MIDSCENE_MODEL_RETRY_COUNT=3
+MIDSCENE_MODEL_TEMPERATURE=0
+
+# Give "understand this screen" and "plan the next step" their own models
+MIDSCENE_INSIGHT_MODEL_NAME=...
+MIDSCENE_PLANNING_MODEL_NAME=...
+```
+
+Two things to know before relying on one:
+
+- **Only the names Midscene knows have any effect**, and a name it does not know
+  is injected into the process and then ignored — silently. A typo behaves
+  exactly like leaving it out.
+- **A value that is not a number falls back to the default** rather than
+  failing, so `=abc` is also silent.
+
+The full list is the `MIDSCENE_*` set documented by
+[Midscene](https://midscenejs.com/model-common-config.html); this project adds no
+names of its own. Treat a pasted `.env` as code: the file is passed to the agent
+process as-is, so only paste your own.
 
 ## Shell channels
 
