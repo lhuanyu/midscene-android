@@ -28,6 +28,9 @@ apps/android-host/app/src/main/assets/bundle-info.txt
 # Personal notes and scratch space
 .local-notes/
 
+# Local planning document — deliberately not part of the published repository
+ROADMAP.md
+
 # Run artefacts
 midscene_run/
 
