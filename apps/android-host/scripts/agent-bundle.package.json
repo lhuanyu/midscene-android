@@ -5,6 +5,7 @@
   "dependencies": {
     "@midscene/core": "1.12.7",
     "@midscene/shared": "1.12.7",
+    "@midscene/test": "1.12.7",
     "js-yaml": "4.3.2",
     "zod": "^3.25.1"
   },

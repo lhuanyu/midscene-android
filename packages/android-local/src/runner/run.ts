@@ -12,6 +12,11 @@ import {
   resolveTaskScript,
 } from '../config/schema';
 import { LocalAndroidDevice } from '../device';
+import {
+  type AndroidTestProjectRunResult,
+  OnDeviceAndroidAgent,
+  runAndroidTestProject,
+} from '../test-runner';
 import { AdbShellTransport } from '../transport/adb-shell';
 import {
   ExecBridgeCommandRunner,
@@ -488,6 +493,13 @@ export async function runLocalAgentConfig(
   config: LocalAgentConfig,
   options: RunLocalAgentOptions = {},
 ): Promise<LocalAgentRunResult> {
+  const tasks = config.tasks;
+  if (!tasks) {
+    throw new Error(
+      'This config has no `tasks` block. Use runLocalAgentTestConfig to run its @midscene/test project instead.',
+    );
+  }
+
   const startedAt = Date.now();
   const transportFactory = options.createTransport ?? buildTransport;
   const transport = transportFactory(config);
@@ -548,18 +560,18 @@ export async function runLocalAgentConfig(
   emitEvent(options.onEvent, {
     event: 'run.start',
     name: config.name,
-    total: config.tasks.length,
+    total: tasks.length,
     startedAt,
   });
 
-  for (let index = 0; index < config.tasks.length; index += 1) {
-    const task = config.tasks[index];
+  for (let index = 0; index < tasks.length; index += 1) {
+    const task = tasks[index];
     const taskStartedAt = Date.now();
     options.onEvent?.({ type: 'task', message: `running ${task.name}` });
     emitEvent(options.onEvent, {
       event: 'step.start',
       index: index + 1,
-      total: config.tasks.length,
+      total: tasks.length,
       name: task.name,
       taskType: task.type,
       // The phase a UI should show while this step runs: an assertion observes,
@@ -600,7 +612,7 @@ export async function runLocalAgentConfig(
       emitEvent(options.onEvent, {
         event: 'step.end',
         index: index + 1,
-        total: config.tasks.length,
+        total: tasks.length,
         name: task.name,
         status: 'ok',
         ms,
@@ -617,7 +629,7 @@ export async function runLocalAgentConfig(
       emitEvent(options.onEvent, {
         event: 'step.end',
         index: index + 1,
-        total: config.tasks.length,
+        total: tasks.length,
         name: task.name,
         status: 'error',
         ms,
@@ -676,6 +688,123 @@ export async function runLocalAgentConfigFile(
 ): Promise<LocalAgentRunResult> {
   const config = loadLocalAgentConfig(configPath);
   return await runLocalAgentConfig(config, { ...options, configPath });
+}
+
+export interface RunLocalAgentTestOptions {
+  /** The config file's own path; relative `test` paths resolve against it. */
+  configPath?: string;
+  createTransport?: (config: LocalAgentConfig) => AndroidTransport;
+  onProgress?: (message: string) => void;
+  /** Structured progress for a live UI; see `runAndroidTestProject`. */
+  onEvent?: (payload: Record<string, unknown>) => void;
+  signal?: AbortSignal;
+}
+
+/**
+ * Run a `@midscene/test` YAML project described by a config file.
+ *
+ * The device and agent lifecycle is the same as {@link runLocalAgentConfig} —
+ * one transport, one device, one agent for the whole run — because on a phone
+ * the run owns the only shell channel there is.
+ */
+export async function runLocalAgentTestConfig(
+  config: LocalAgentConfig,
+  options: RunLocalAgentTestOptions = {},
+): Promise<AndroidTestProjectRunResult> {
+  const test = config.test;
+  if (!test) {
+    throw new Error(
+      'This config has no `test` block. Use runLocalAgentConfig for a task list, or add `test` to run a @midscene/test project.',
+    );
+  }
+
+  const transportFactory = options.createTransport ?? buildTransport;
+  const transport = transportFactory(config);
+  await transport.getCapabilities();
+
+  const device = await LocalAndroidDevice.create(transport, {
+    displayId: config.device.displayId,
+    appNameMapping: config.device.appNameMapping,
+    // Left exactly as configured: the model's shell action has its own flag and
+    // never inherits the YAML one, or the reverse.
+    exposeRunAdbShellAction: config.device.exposeRunAdbShellAction,
+  });
+
+  applyModelConfig(config);
+
+  /**
+   * The device as an agent sees it: identical, except that `destroy()` does
+   * nothing.
+   *
+   * Destroying an agent destroys its interface — that is the step that
+   * finalizes the agent's report — but on a phone the device *is* the run's
+   * shell channel and has to outlive every case. Each agent gets this view and
+   * the real device is destroyed once, at the end of the run.
+   */
+  const agentDevice = new Proxy(device, {
+    get(target, property, receiver) {
+      if (property === 'destroy') {
+        return async () => undefined;
+      }
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+
+  const agentOpts = {
+    generateReport: config.agent.generateReport,
+    autoPrintReportMsg: false,
+    screenshotShrinkFactor: config.agent.screenshotShrinkFactor,
+    aiContexts: config.agent.aiContexts,
+  };
+
+  if (config.agent.resetToHome) {
+    await resetDeviceToHome(
+      transport,
+      config.agent.resetToHomeTimeoutMs,
+      config.agent.controllerPackage,
+      undefined,
+    );
+  }
+
+  // Relative paths in a config file are relative to that file, not to whatever
+  // directory the process happens to have been started in.
+  const baseDir = options.configPath
+    ? path.dirname(path.resolve(options.configPath))
+    : process.cwd();
+
+  try {
+    return await runAndroidTestProject({
+      projectRoot: path.resolve(baseDir, test.projectDir),
+      reportDir: path.resolve(baseDir, test.reportDir),
+      resultDir: path.resolve(baseDir, test.resultDir),
+      // One agent per case attempt, each with its own report file. A run-wide
+      // agent would hand the same report to every scope and the assembler
+      // rejects that outright.
+      createAgent: (runId) =>
+        new OnDeviceAndroidAgent(agentDevice, {
+          ...agentOpts,
+          reportFileName: `android-test-${runId}`,
+        }),
+      runAdbShell: test.runAdbShell,
+      projectName: config.name,
+      ...(test.include ? { include: test.include } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.onProgress ? { onProgress: options.onProgress } : {}),
+      ...(options.onEvent ? { onEvent: options.onEvent } : {}),
+    });
+  } finally {
+    await device.destroy();
+  }
+}
+
+/** Read a config file and run its `@midscene/test` project. */
+export async function runLocalAgentTestConfigFile(
+  configPath: string,
+  options: Omit<RunLocalAgentTestOptions, 'configPath'> = {},
+): Promise<AndroidTestProjectRunResult> {
+  const config = loadLocalAgentConfig(configPath);
+  return await runLocalAgentTestConfig(config, { ...options, configPath });
 }
 
 /**

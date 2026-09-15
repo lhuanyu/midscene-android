@@ -147,23 +147,42 @@ export {
   localAgentConfigSchema,
   localAgentDeviceSchema,
   localAgentTaskSchema,
+  localAgentTestSchema,
   resolveTaskScript,
 } from './config/schema';
 export type {
   LocalAgentConfig,
   LocalAgentDeviceConfig,
   LocalAgentTask,
+  LocalAgentTestConfig,
 } from './config/schema';
 
 export {
   runLocalAgentConfig,
   runLocalAgentConfigFile,
+  runLocalAgentTestConfig,
+  runLocalAgentTestConfigFile,
 } from './runner/run';
 export type {
   LocalAgentRunResult,
   LocalAgentTaskResult,
   RunLocalAgentOptions,
+  RunLocalAgentTestOptions,
 } from './runner/run';
 
 export { LocalAndroidDevice } from './device';
 export type { LocalAndroidDeviceOpt } from './device';
+
+export {
+  OnDeviceAndroidAgent,
+  type OnDeviceAndroidAgentOpt,
+  type AndroidTestProjectRunResult,
+  type AndroidTestProjectSummary,
+  type CollectedSource,
+  type RunAndroidTestProjectOptions,
+  buildAndroidTestNodes,
+  createRunId,
+  onDeviceAndroidNodeDefinitions,
+  runAdbShellNode,
+  runAndroidTestProject,
+} from './test-runner';

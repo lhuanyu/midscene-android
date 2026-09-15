@@ -154,6 +154,73 @@ export class LocalAndroidDevice implements AbstractInterface {
     await this.transport.forceStop(resolved);
   }
 
+  /**
+   * Press the system back key.
+   *
+   * The same key the model-visible `AndroidBackButton` action presses. The test
+   * runner needs it as a plain method so a YAML step can call it directly,
+   * without going through the model.
+   */
+  async back(): Promise<void> {
+    await this.systemButton('backButton')();
+  }
+
+  /** Press the system home key. See {@link back}. */
+  async home(): Promise<void> {
+    await this.systemButton('homeButton')();
+  }
+
+  /** Press the system recent-apps key. See {@link back}. */
+  async recentApps(): Promise<void> {
+    await this.systemButton('recentAppsButton')();
+  }
+
+  /**
+   * Run a shell command through the transport and return its stdout.
+   *
+   * This is the same capability the model-visible `RunAdbShell` action wraps
+   * (`exposeRunAdbShellAction`). The test runner exposes it to YAML behind its
+   * **own** switch, so the two surfaces are enabled independently: turning on a
+   * YAML step must never silently hand the model a new capability, or the
+   * reverse.
+   */
+  async runAdbShell(
+    command: string,
+    options: { timeoutMs?: number } = {},
+  ): Promise<string> {
+    if (!this.transport.runShell) {
+      throw new Error(
+        `The ${this.transport.backend} transport cannot run shell commands`,
+      );
+    }
+
+    const result = await this.transport.runShell(command, {
+      timeoutMs: options.timeoutMs,
+    });
+
+    if (result.exitCode !== 0) {
+      throw new Error(
+        `runAdbShell failed (exit ${result.exitCode}): ${result.stderr || result.stdout}`,
+      );
+    }
+
+    return result.stdout;
+  }
+
+  private systemButton(
+    name: 'backButton' | 'homeButton' | 'recentAppsButton',
+  ): () => Promise<void> {
+    const primitives = this.inputPrimitives.system;
+    const button = primitives?.[name];
+    if (!button) {
+      throw new Error(
+        `The ${this.transport.backend} transport cannot press the ${name}`,
+      );
+    }
+
+    return button.bind(primitives);
+  }
+
   /** Connect path that probes capabilities before the device is used. */
   static async create(
     transport: AndroidTransport,

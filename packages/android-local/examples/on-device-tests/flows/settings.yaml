@@ -1,0 +1,52 @@
+# A `@midscene/test` case file.
+#
+# Every step is one registered "node". The Midscene AI nodes (aiAct, aiAssert,
+# aiTap, aiQuery, wait, ...) come from the agent; the device nodes come from this
+# project and operate the phone directly, without the model:
+#
+#   launch: <uri>        package name, `pkg/activity`, URL, or a mapped name
+#   terminate: <uri>     force-stop by package name
+#   back: {}             system back key
+#   home: {}             system home key
+#   recentApps: {}       system recent-apps key
+#   runAdbShell: <cmd>   ONLY when test.runAdbShell is true (off by default)
+#
+# Lifecycle: beforeAll / beforeEach / afterEach / afterAll run around the cases.
+#
+# Note the `terminate` before every `launch`. `launch` starts the app's existing
+# task if it has one, so a suite that only launches inherits whatever screen the
+# previous case left behind and asserts against the wrong state. Stopping the
+# app first is what makes a case start from the same place every time — and the
+# device steps below are what make that possible without a shell command.
+
+beforeEach:
+  - home: {}
+
+cases:
+  - name: the settings app opens and shows its search box
+    tags: [smoke]
+    steps:
+      - terminate: Settings
+      - launch: Settings
+      # `launch` returns once Android has shown the activity — which on a cold
+      # start is the splash screen, not the app. `aiAssert` looks once and does
+      # not retry, so give the app a moment before asserting on its content.
+      - wait: { duration: 2, unit: s }
+      - aiAssert: the Settings app is open and showing its list of options
+      - aiAct: open the search box at the top of Settings
+      - aiAssert: a text field is focused and the on-screen keyboard is visible
+
+  - name: back leaves the app without closing it
+    steps:
+      - terminate: Settings
+      - launch: Settings
+      - wait: { duration: 2, unit: s }
+      - back: {}
+      - aiAssert: the Settings app is no longer in the foreground
+
+afterAll:
+  # Records a line into the unified report, so the report explains itself.
+  - recordToReport:
+      title: On-device smoke finished
+      options:
+        content: Launched Settings, used the search box, and verified back.

@@ -4,14 +4,19 @@
  *
  * It runs inside the Android host app's embedded Node (the app injects the
  * bridge coordinates), or on a PC against adb. The surface is deliberately
- * small: inspect the device (`doctor`) and run a config (`run`).
+ * small: inspect the device (`doctor`), run a task list (`run`), or run a
+ * `@midscene/test` YAML project (`test`).
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
 import { loadLocalAgentConfig } from './config/schema';
-import { runLocalAgentConfigFile } from './runner/run';
+import type { LocalAgentConfig } from './config/schema';
+import {
+  runLocalAgentConfigFile,
+  runLocalAgentTestConfigFile,
+} from './runner/run';
 import { AdbShellTransport } from './transport/adb-shell';
 import {
   ExecBridgeCommandRunner,
@@ -44,12 +49,24 @@ const USAGE = `midscene-local — on-device Android agent
 Usage:
   midscene-local doctor [--backend device-bridge|adb-shell] [--serial <id>]
   midscene-local run <config.yaml|config.json>
+  midscene-local test <config.yaml|config.json>
   midscene-local --version
   midscene-local --help
 
 Commands:
   doctor   Probe the device: capabilities, health, displays and timing.
-  run      Execute the tasks described by a config file.
+  run      Execute the config file: its task list, or — when it carries a
+           test block instead of tasks — its @midscene/test project.
+  test     Run the @midscene/test YAML project described by a config file.
+           Identical to run on such a config; use it to be explicit.
+
+           YAML steps are the Midscene AI steps plus the Android device steps:
+           launch, terminate, back, home and recentApps. The runAdbShell step
+           exists only when test.runAdbShell is true — it lets any YAML file in
+           the project run shell commands as the shell user, so it is off by
+           default and announced on every run that enables it.
+
+           The unified HTML report is written to test.reportDir.
 
 Backends:
   device-bridge        (default) On-device path. The host app injects
@@ -200,7 +217,17 @@ async function run(configPath: string | undefined): Promise<number> {
   }
 
   // Validate before touching a device so a typo fails fast.
-  loadLocalAgentConfig(configPath);
+  const config = loadLocalAgentConfig(configPath);
+
+  /**
+   * `run` executes whatever the config describes, so a shell that has a config
+   * file and no YAML parser can hand it over without deciding first. The host
+   * app is exactly that shell: the schema knows whether this is a task list or
+   * a test project, and Java does not.
+   */
+  if (config.test) {
+    return await runTestConfig(configPath, config);
+  }
 
   const result = await runLocalAgentConfigFile(configPath, {
     onEvent: (event) => {
@@ -214,6 +241,52 @@ async function run(configPath: string | undefined): Promise<number> {
 
   console.log(JSON.stringify(result, null, 2));
   return result.ok ? 0 : 1;
+}
+
+async function runTestConfig(
+  configPath: string,
+  config: LocalAgentConfig,
+): Promise<number> {
+  console.error(`[test] running the @midscene/test project in ${configPath}`);
+  if (config.test?.runAdbShell) {
+    console.error(
+      '[test] WARNING: test.runAdbShell is on — every YAML file in this project can run shell commands on this device.',
+    );
+  }
+
+  const result = await runLocalAgentTestConfigFile(configPath, {
+    onProgress: (message) => console.error(message),
+    /**
+     * Same channel as the task runner: a `[event] {json}` line on stdout, which
+     * is what the host app parses for its progress overlay. Text goes to stderr
+     * so it never competes with the result JSON on stdout.
+     */
+    onEvent: (payload) => {
+      process.stdout.write(`[event] ${JSON.stringify(payload)}\n`);
+    },
+  });
+
+  console.log(JSON.stringify(result, null, 2));
+  return result.status === 'success' ? 0 : 1;
+}
+
+async function runTest(configPath: string | undefined): Promise<number> {
+  if (!configPath) {
+    console.error('test requires a config file path\n');
+    console.error(USAGE);
+    return 2;
+  }
+
+  // Validate before touching a device so a typo fails fast.
+  const config = loadLocalAgentConfig(configPath);
+  if (!config.test) {
+    console.error(
+      `${configPath} has no \`test\` block; add one to run a @midscene/test project.\n`,
+    );
+    return 2;
+  }
+
+  return await runTestConfig(configPath, config);
 }
 
 async function main(): Promise<void> {
@@ -237,6 +310,9 @@ async function main(): Promise<void> {
       return;
     case 'run':
       process.exitCode = await run(positional[1]);
+      return;
+    case 'test':
+      process.exitCode = await runTest(positional[1]);
       return;
     default:
       console.error(`Unknown command "${command}"\n`);

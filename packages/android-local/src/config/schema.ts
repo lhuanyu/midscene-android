@@ -69,44 +69,85 @@ export const localAgentTaskSchema = z.object({
   script: z.string().optional(),
 });
 
-export const localAgentConfigSchema = z.object({
-  /** Name shown in logs and result files. */
-  name: z.string().default('midscene-local'),
-  device: localAgentDeviceSchema.default({}),
-  model: localAgentModelSchema.optional(),
-  agent: z
-    .object({
-      generateReport: z.boolean().default(true),
-      reportDir: z.string().optional(),
-      screenshotShrinkFactor: z.number().positive().optional(),
-      /** Extra AI context, applied to every task. */
-      aiContexts: z.record(z.string()).optional(),
-      /**
-       * Send the device HOME before the first task (default true).
-       *
-       * The agent is often started from its own UI, and every screenshot would
-       * then show that UI - the report captures the controller instead of the
-       * task. Pressing HOME first moves the controller to the background; the
-       * foreground service keeps the run alive.
-       */
-      resetToHome: z.boolean().default(true),
-      /** How long to wait for the launcher after pressing HOME. */
-      resetToHomeTimeoutMs: z.number().int().positive().default(8000),
-      /**
-       * Package that must no longer be in the foreground before the first task
-       * (typically the controller app). When set, the runner keeps pressing HOME
-       * until that package is gone instead of waiting for any change - some
-       * devices fall back to the previous activity when no launcher is available.
-       */
-      controllerPackage: z.string().optional(),
-    })
-    .default({}),
-  tasks: z.array(localAgentTaskSchema).min(1),
+/**
+ * A `@midscene/test` YAML project, run on this device.
+ *
+ * `tasks` and `test` are two ways to say what a run does: a short list of AI
+ * tasks, or a real test project with cases, lifecycle hooks and a unified
+ * report. A config carries one or the other.
+ */
+export const localAgentTestSchema = z.object({
+  /** Directory holding the YAML cases, relative to the config file. */
+  projectDir: z.string().default('.'),
+  /** Cases to run, as globs relative to `projectDir`. Default: every YAML file. */
+  include: z.array(z.string()).optional(),
+  /** Unified HTML report directory, relative to the config file. */
+  reportDir: z.string().default('./midscene_run/report'),
+  /** Per-run summaries, relative to the config file. */
+  resultDir: z.string().default('./midscene_run/test-results'),
+  /**
+   * Register the `runAdbShell` YAML step.
+   *
+   * **Defaults to false, and is deliberately separate from
+   * `device.exposeRunAdbShellAction`.** That flag lets the *model* run shell
+   * commands; this one lets a *YAML file* run them. A YAML file is usually
+   * someone else's suite, checked in and executed unattended, so it is a
+   * different decision — turning on either must never turn on the other.
+   *
+   * When false the step does not exist at all: a case that uses it fails to
+   * collect, rather than silently doing nothing.
+   */
+  runAdbShell: z.boolean().default(false),
 });
+
+export const localAgentConfigSchema = z
+  .object({
+    /** Name shown in logs and result files. */
+    name: z.string().default('midscene-local'),
+    device: localAgentDeviceSchema.default({}),
+    model: localAgentModelSchema.optional(),
+    agent: z
+      .object({
+        generateReport: z.boolean().default(true),
+        reportDir: z.string().optional(),
+        screenshotShrinkFactor: z.number().positive().optional(),
+        /** Extra AI context, applied to every task. */
+        aiContexts: z.record(z.string()).optional(),
+        /**
+         * Send the device HOME before the first task (default true).
+         *
+         * The agent is often started from its own UI, and every screenshot would
+         * then show that UI - the report captures the controller instead of the
+         * task. Pressing HOME first moves the controller to the background; the
+         * foreground service keeps the run alive.
+         */
+        resetToHome: z.boolean().default(true),
+        /** How long to wait for the launcher after pressing HOME. */
+        resetToHomeTimeoutMs: z.number().int().positive().default(8000),
+        /**
+         * Package that must no longer be in the foreground before the first task
+         * (typically the controller app). When set, the runner keeps pressing HOME
+         * until that package is gone instead of waiting for any change - some
+         * devices fall back to the previous activity when no launcher is available.
+         */
+        controllerPackage: z.string().optional(),
+      })
+      .default({}),
+    tasks: z.array(localAgentTaskSchema).min(1).optional(),
+    test: localAgentTestSchema.optional(),
+  })
+  .refine(
+    (config) => (config.tasks === undefined) !== (config.test === undefined),
+    {
+      message:
+        'A config takes exactly one of `tasks` (a list of AI tasks) or `test` (a @midscene/test YAML project).',
+    },
+  );
 
 export type LocalAgentConfig = z.infer<typeof localAgentConfigSchema>;
 export type LocalAgentDeviceConfig = z.infer<typeof localAgentDeviceSchema>;
 export type LocalAgentTask = z.infer<typeof localAgentTaskSchema>;
+export type LocalAgentTestConfig = z.infer<typeof localAgentTestSchema>;
 
 /**
  * Load a config from a YAML or JSON file. Throws with a readable message so a

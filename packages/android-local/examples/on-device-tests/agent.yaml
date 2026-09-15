@@ -1,0 +1,49 @@
+# Example: a `@midscene/test` project that runs on the phone itself.
+#
+# This is the config the host app (or `midscene-local test`) reads. The YAML
+# cases live next to it under `flows/`, in the `@midscene/test` format — a
+# different, richer format than the `tasks:` list this package also supports:
+# cases, tags, lifecycle hooks, and one unified HTML report.
+#
+# Run it on a PC against a device over adb:
+#   midscene-local test examples/on-device-tests/agent.yaml
+#
+# On the phone the app injects the bridge environment, so `backend` is
+# informational there.
+
+name: on-device-tests
+
+device:
+  # adb-shell = this host drives the device. On the phone the app selects the
+  # device-bridge backend by injecting the bridge environment.
+  backend: adb-shell
+  # Without a mapping, use package names: `launch: com.android.settings`.
+  appNameMapping:
+    Settings: com.android.settings
+
+model:
+  # Prefer the environment (MIDSCENE_MODEL_API_KEY / _BASE_URL / _NAME) or a
+  # secret store. A key written here is a key in your repository.
+  name: gpt-4o
+
+agent:
+  generateReport: true
+
+test:
+  # Directory holding the YAML cases, relative to this file.
+  projectDir: .
+  # Which cases to run, relative to projectDir. Omit to run every YAML file.
+  include:
+    - 'flows/**/*.yaml'
+  # The unified Midscene Test HTML report, and the per-run summaries the app
+  # lists runs from. Both are relative to this file.
+  reportDir: ./midscene_run/report
+  resultDir: ./midscene_run/test-results
+  # Register the `runAdbShell` YAML step.
+  #
+  # OFF, and left off in the example on purpose. Turning it on lets *every* YAML
+  # file in this project run arbitrary shell commands on the device as the shell
+  # user — including suites you did not write and did not read. It is a separate
+  # switch from `device.exposeRunAdbShellAction`, which gates the same capability
+  # for the model, and enabling one never enables the other.
+  runAdbShell: false

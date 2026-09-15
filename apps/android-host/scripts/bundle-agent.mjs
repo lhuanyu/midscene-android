@@ -54,7 +54,11 @@ const lockedManifest = JSON.parse(fs.readFileSync(bundleManifest, 'utf8'));
 // pinned for the bundle must be the one the package declares. These used to be
 // implied by a shared workspace version; now that the package depends on
 // published Midscene, compare them explicitly.
-const MIDSCENE_DEPENDENCIES = ['@midscene/core', '@midscene/shared'];
+const MIDSCENE_DEPENDENCIES = [
+  '@midscene/core',
+  '@midscene/shared',
+  '@midscene/test',
+];
 for (const name of MIDSCENE_DEPENDENCIES) {
   const declared = workspaceManifest.dependencies?.[name];
   const bundled = lockedManifest.dependencies?.[name];
