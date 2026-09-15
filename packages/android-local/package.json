@@ -1,10 +1,10 @@
 {
   "name": "midscene-android",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/lhuanyu/midscene-android.git",
-    "directory": "packages/midscene-android"
+    "directory": "packages/android-local"
   },
   "description": "Android on-device automation runtime for Midscene. Community project, not affiliated with the Midscene team.",
   "keywords": [

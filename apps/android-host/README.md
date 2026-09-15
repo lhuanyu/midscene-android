@@ -110,5 +110,5 @@ For a local test key, `scripts/make-release-keystore.sh` creates a Git-ignored
 keystore using the same environment variables. Keep the signing key and its
 password outside the repository.
 
-The [`midscene-android` README](../../packages/midscene-android/README.md)
+The [`midscene-android` README](../../packages/android-local/README.md)
 describes the package API and CLI.

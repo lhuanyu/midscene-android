@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const hostRoot = path.resolve(here, '..');
 const repoRoot = path.resolve(hostRoot, '../..');
-const androidLocal = path.join(repoRoot, 'packages/midscene-android');
+const androidLocal = path.join(repoRoot, 'packages/android-local');
 const bundleManifest = path.join(here, 'agent-bundle.package.json');
 const bundleLock = path.join(here, 'agent-bundle.pnpm-lock.yaml');
 const workDir = path.join(hostRoot, 'build/agent-bundle');

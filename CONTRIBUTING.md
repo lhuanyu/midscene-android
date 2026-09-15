@@ -60,7 +60,7 @@ scope**. Scopes in use:
 
 | Scope | Applies to |
 |---|---|
-| `android` | `packages/midscene-android` (the agent runtime) |
+| `android` | `packages/android-local` (the agent runtime) |
 | `host` | `apps/android-host` (the APK host) |
 | `workflow` | `.github/workflows` |
 | `docs` | documentation only |
@@ -69,7 +69,7 @@ Example: `fix(host): stop the progress overlay swallowing taps`
 
 ## Code standards
 
-- **TypeScript** in `packages/midscene-android`: formatted and linted by Biome
+- **TypeScript** in `packages/android-local`: formatted and linted by Biome
   (`pnpm run lint`). Keep the public API surface deliberate — this package is
   published to npm.
 - **Java/Kotlin** in `apps/android-host`: match the surrounding style. The JVM

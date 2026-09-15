@@ -14,7 +14,7 @@ importers:
 
   apps/android-host: {}
 
-  packages/midscene-android:
+  packages/android-local:
     dependencies:
       '@midscene/core':
         specifier: 1.12.7

@@ -92,7 +92,7 @@ public class SelfCheckScriptTest {
     @Test
     public void checkedInExampleKeepsTheSameAnchors() throws Exception {
         File example = new File(hostRoot(),
-                "../../packages/midscene-android/examples/self-check.yaml");
+                "../../packages/android-local/examples/self-check.yaml");
         Assume.assumeTrue("example copy lives in the repository", example.isFile());
 
         // Comments may discuss the wording ("首页" reads as the home screen); only the
