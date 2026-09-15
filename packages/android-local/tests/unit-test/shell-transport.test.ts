@@ -706,14 +706,43 @@ describe('ShellTransport app management', () => {
     );
   });
 
-  test('falls back to the launcher when only a package is known', async () => {
-    const { runner, transport } = createTransport([{ match: [], stdout: '' }]);
+  test('resolves a package to its launcher activity and starts it', async () => {
+    const { runner, transport } = createTransport([
+      {
+        match: [],
+        stdout:
+          'priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true\ncom.example.app/.MainActivity',
+      },
+    ]);
 
     await transport.startActivity({ packageName: 'com.example.app' });
 
     expect(payloadOf(runner, 0)).toBe(
-      "monkey -p 'com.example.app' -c android.intent.category.LAUNCHER 1",
+      "cmd package resolve-activity --brief -c android.intent.category.LAUNCHER 'com.example.app'",
     );
+    expect(payloadOf(runner, 1)).toBe(
+      "am start -W -n 'com.example.app/.MainActivity'",
+    );
+  });
+
+  test('fails when a package resolves to no launcher activity', async () => {
+    // `resolve-activity` exits 0 and prints "No activity found" both for a
+    // package that does not exist and for one with no launcher entry, so the
+    // miss can only be read from the text. Reporting it is the point: a typo in
+    // an app name used to be swallowed and looked like a successful launch.
+    const { runner, transport } = createTransport([
+      { match: [], stdout: 'No activity found\n' },
+    ]);
+
+    const error = await transport
+      .startActivity({ packageName: 'Settings' })
+      .catch((caught: unknown) => caught);
+
+    expect((error as { code?: string }).code).toBe('CommandFailed');
+    expect((error as Error).message).toContain('no launcher activity');
+    expect((error as Error).message).toContain('appNameMapping');
+    // Nothing was launched.
+    expect(runner.calls).toHaveLength(1);
   });
 
   test('force-stops a package', async () => {

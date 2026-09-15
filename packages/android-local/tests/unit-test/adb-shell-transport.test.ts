@@ -170,6 +170,7 @@ describe('AdbShellTransport device semantics', () => {
   test('starts an activity, a deep link and a launcher intent', async () => {
     const { runner, transport } = createTransport([
       ...deviceResponses(),
+      { match: ['resolve-activity'], stdout: 'com.example.app/.Main\n' },
       { match: ['am start'], stdout: '' },
       { match: ['monkey'], stdout: '' },
       { match: ['am force-stop'], stdout: '' },
@@ -192,9 +193,12 @@ describe('AdbShellTransport device semantics', () => {
     expect(commands).toContain(
       "am start -W -a android.intent.action.VIEW -d 'https://example.com'",
     );
+    // A bare package resolves to its launcher activity first, so the launch
+    // has a real exit code instead of monkey's unreliable one.
     expect(commands).toContain(
-      "monkey -p 'com.example.app' -c android.intent.category.LAUNCHER 1",
+      "cmd package resolve-activity --brief -c android.intent.category.LAUNCHER 'com.example.app'",
     );
+    expect(commands).toContain("am start -W -n 'com.example.app/.Main'");
     expect(commands).toContain("am force-stop 'com.example.app'");
   });
 

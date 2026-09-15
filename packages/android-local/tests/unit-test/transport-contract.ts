@@ -165,6 +165,7 @@ export function describeTransportContract(harness: ContractHarness): void {
     test('starts activities and force-stops packages', async () => {
       const transport = harness.create([
         ...harness.healthy(),
+        { match: ['resolve-activity'], stdout: 'com.example.app/.Main\n' },
         { match: ['am start'], stdout: '' },
         { match: ['am force-stop'], stdout: '' },
         { match: ['monkey'], stdout: '' },

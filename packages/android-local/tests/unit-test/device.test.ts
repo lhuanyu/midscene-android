@@ -36,9 +36,12 @@ function deviceResponses(): FakeCommandResponse[] {
     { match: ['screencap'], stdout: '' },
     { match: ['mkdir -p'], stdout: '' },
     { match: ['rm -f'], stdout: '' },
+    {
+      match: ['resolve-activity'],
+      stdout: 'com.example.app/.Main\n',
+    },
     { match: ['am start'], stdout: '' },
     { match: ['am force-stop'], stdout: '' },
-    { match: ['monkey'], stdout: '' },
     { match: ['date +'], stdout: '2026-09-11T22:55:00\n' },
     { match: [], stdout: '' },
   ];
@@ -370,7 +373,16 @@ describe('LocalAndroidDevice app lifecycle actions (phone parity)', () => {
       ),
     ).toBe(true);
     expect(
-      runner.commands.some((c) => c.includes("monkey -p 'com.example.app'")),
+      runner.commands.some((c) =>
+        c.includes(
+          "resolve-activity --brief -c android.intent.category.LAUNCHER 'com.example.app'",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      runner.commands.some((c) =>
+        c.includes("am start -W -n 'com.example.app/.Main'"),
+      ),
     ).toBe(true);
     expect(commands.length).toBeGreaterThan(0);
   });
@@ -384,7 +396,11 @@ describe('LocalAndroidDevice app lifecycle actions (phone parity)', () => {
     await device.terminate('微信');
 
     expect(
-      runner.commands.some((c) => c.includes("monkey -p 'com.tencent.mm'")),
+      runner.commands.some((c) =>
+        c.includes(
+          "resolve-activity --brief -c android.intent.category.LAUNCHER 'com.tencent.mm'",
+        ),
+      ),
     ).toBe(true);
     expect(
       runner.commands.some((c) => c.includes("am force-stop 'com.tencent.mm'")),

@@ -1,6 +1,11 @@
 import { getDebug } from '@midscene/shared/logger';
 
 import {
+  parseResolvedActivity,
+  resolveActivityCommand,
+  startActivityCommand,
+} from './activity';
+import {
   type CommandRunner,
   NodeCommandRunner,
   joinShellCommand,
@@ -619,10 +624,39 @@ export class AdbShellTransport implements AndroidTransport {
       return;
     }
 
-    await this.runOrThrow(
-      `monkey -p ${quoteShellArg(packageName as string)} -c android.intent.category.LAUNCHER 1`,
+    /**
+     * Resolve the launcher activity and start it explicitly.
+     *
+     * This used to hand the package to `monkey`, whose exit code is not a
+     * success signal: on an image with no physical keys (every emulator, and
+     * some headless devices) it launches the app and still exits 251, so a
+     * launch that worked was reported as a failure.
+     *
+     * Ignoring that exit code instead would only trade one wrong answer for
+     * another, because a package that does not exist would then look like a
+     * success. `am start` reports the truth, so the component is resolved
+     * first, and resolving to nothing is an error rather than a silent no-op.
+     */
+    const resolved = await this.runOrThrow(
+      resolveActivityCommand(packageName as string),
       'startActivity',
     );
+    const component = parseResolvedActivity(resolved.stdout.toString('utf8'));
+    if (!component) {
+      throw new AndroidTransportError(
+        `${packageName} has no launcher activity: check the package name, or map a friendly name in device.appNameMapping`,
+        {
+          code: 'CommandFailed',
+          backend: this.backend,
+          command: resolved.command,
+          exitCode: 0,
+          stdout: resolved.stdout.toString('utf8').trim(),
+          stderr: resolved.stderr.trim(),
+        },
+      );
+    }
+
+    await this.runOrThrow(startActivityCommand(component), 'startActivity');
   }
 
   async forceStop(packageName: string): Promise<void> {
