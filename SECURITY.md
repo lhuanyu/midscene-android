@@ -55,18 +55,33 @@ We disclose the issues **we know about**, ordered by risk.
 **Why:** adb's host protocol has no client authentication — it was designed on the
 assumption that the host is a different, trusted computer. This app puts the host
 and the target on the same device and communicates over loopback TCP, and Android
-does **not** isolate loopback per app. Other apps on the device could therefore
-connect to that server in principle.
+does **not** isolate loopback per app. Another app on the device could therefore
+connect to that server and inherit the shell uid it exposes.
 
-**Status: mitigated, not eliminated.**
-- **The default channel is Shizuku** (binder + explicit per-app authorization),
-  which uses no network listener at all
-- The adb channel must be selected explicitly in Settings, and the UI shows the
-  trust caveat
-- The server binds loopback only
+**Status: present, not mitigated.**
+- **The default channel is adb** (`ActiveExec.channel`), chosen because it needs
+  no second app and no permission a vendor ROM can withhold. Shizuku is
+  implemented and works, but has to be selected explicitly.
+- The server listens on a **fixed port** (`LocalAdbBackend.SERVER_PORT = 5038`)
+  and its lifetime is **not** scoped to a run — it outlives the app and stays
+  resident for the life of the installation.
+- The listener is **not** explicitly bound to loopback. The bundled adb supports
+  `-L`, but only `-P` is passed today, so "loopback only" is adb's own default
+  behaviour rather than a contract this app enforces.
+- The UI shows which channel is selected, but there is **no warning** that the
+  adb channel opens a local listener.
 
-**If you want a stronger guarantee:** use the Shizuku channel and do not enable
-the adb channel.
+**If you want a stronger guarantee today:** select the **Shizuku** channel in
+Settings. It uses a binder plus an explicit per-app grant, with no network
+listener at all.
+
+**Planned before the first public release** (see `ROADMAP.md`, blocker 2): make
+Shizuku the default channel, bind explicitly with `-L 127.0.0.1:<port>`, scope the
+server's lifetime to a run instead of leaving it resident, and surface the caveat
+in the UI.
+
+Note that a **random port is not a fix**: adb rejects port 0, and loopback is
+scannable — that would be obscurity, not a boundary.
 
 ### 2. Report WebView file access (low)
 

@@ -1,5 +1,7 @@
 # midscene-android
 
+**English** | [简体中文](./README.zh.md)
+
 **Run AI visual automation entirely on the phone — no PC, no cloud.**
 
 > ⚠️ **Community project.** This is a community extension built on
