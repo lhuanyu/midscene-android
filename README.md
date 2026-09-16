@@ -64,8 +64,8 @@ near it — running a check now, and leaving a report you can read on the spot.
   </a>
 </p>
 
-**[Watch the demo (2m20s) →](docs/demo/)** — a 鸿蒙车机 (a HarmonyOS car head
-unit, Android 12) given one instruction, driven by `qwen3.8-flash`:
+**[Watch the demo (2m20s) →](docs/demo/)** — a HarmonyOS car head unit
+(Android 12) given one instruction, driven by `qwen3.8-flash`:
 
 > Open the App Centre, find QQ Music, open it and search for Coldplay, play the
 > first song in the results.

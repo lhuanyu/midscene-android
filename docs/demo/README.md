@@ -2,19 +2,22 @@
 
 [简体中文](./README.zh.md) | **English**
 
-One instruction, typed on the car's own screen. No computer, no cable, no adb
-from a laptop:
+One instruction, typed on the car's own screen — in Chinese. No computer, no
+cable, no adb from a laptop:
 
 > Open the App Centre, find QQ Music, open it and search for Coldplay, play the
 > first song in the results.
 
-In the app's own language, which is what the video shows:
-
-> 打开应用中心，找到QQ音乐，打开搜索Coldplay，播放搜索结果的第一首歌曲。
+<blockquote>
+  <details>
+    <summary>What that was as typed, on screen</summary>
+    <p>打开应用中心，找到QQ音乐，打开搜索Coldplay，播放搜索结果的第一首歌曲。</p>
+  </details>
+</blockquote>
 
 <p align="center">
   <a href="demo-1080p.mp4">
-    <img src="poster.jpg" width="720" alt="Midscene on a HarmonyOS car head unit: the Chinese instruction typed into the app, with the Run button below it">
+    <img src="poster.jpg" width="720" alt="Midscene on a HarmonyOS car head unit: the instruction typed into the app, with the Run button below it">
   </a>
 </p>
 
@@ -29,9 +32,9 @@ the 4K original is a release asset, for the reason below.
 
 | | |
 |---|---|
-| Device | A 鸿蒙车机 (a HarmonyOS car head unit) |
+| Device | HarmonyOS car head unit |
 | Android reported by the device | Android 12 |
-| Instruction language | Chinese, as quoted above |
+| Instruction language | Chinese, translated above |
 | Model behind the agent | `qwen3.8-flash` |
 | Result | one task, exit 0, run time reported by the app as 120s |
 | Footage | 2m20s, 4K (3840x2160) HEVC, recorded off the screen |
