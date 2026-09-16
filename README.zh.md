@@ -51,6 +51,21 @@ Android UI 自动化通常只有两条路：在电脑上写脚本、用数据线
 - **凭据保持私密** —— 模型凭据存放在应用私有存储中，绝不放进共享存储。
 - **运行时可溯源** —— 原生运行时（Node、adb）来自固定版本、经 SHA-256 校验的包。
 
+## 看它跑一遍
+
+<p align="center">
+  <a href="docs/demo/">
+    <img src="docs/demo/poster.jpg" width="640" alt="Midscene 跑在鸿蒙车机上：应用里输入了指令「打开应用中心，找到QQ音乐，打开搜索Coldplay，播放搜索结果的第一首歌曲。」">
+  </a>
+</p>
+
+**[看演示（2 分 20 秒）→](docs/demo/)** ——
+鸿蒙车机（Android 12）上输入一条指令，背后是
+`qwen3.8-flash`：打开应用中心，找到QQ音乐，打开搜索Coldplay，播放搜索结果的第一首歌曲。
+应用中心是智能体自己找到的，搜索是在 QQ音乐 里完成的，播放的是搜索结果第一条 ——
+点下「运行」之后屏幕再没被碰过。片段从本仓库直接内嵌播放；[4K 原片](https://github.com/lhuanyu/midscene-android/releases/tag/demo-v1)
+是 release 附件，有意不进 git。
+
 ## 安装
 
 从 [Releases](https://github.com/lhuanyu/midscene-android/releases) 页面下载
