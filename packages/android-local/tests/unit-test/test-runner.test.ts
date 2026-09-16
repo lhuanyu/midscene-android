@@ -590,3 +590,55 @@ describe('the shipped example project', () => {
     }
   });
 });
+
+/**
+ * Stopping a run is how you look at what it did, so a stopped run has to leave
+ * something to look at.
+ *
+ * This asserts the property, not the fix: measured against the code it was
+ * written for, it passes either way, because the engine takes its tidy abort
+ * path in this synthetic case. The failure it came from only reproduces when a
+ * real agent call is in flight and the host kills the process, which is a device
+ * observation, not something this harness can stage. Keep it as a statement of
+ * the requirement; do not read it as a guard on the abort handling.
+ */
+describe('stopping a run part way', () => {
+  test('still writes the report and the result file', async () => {
+    const root = writeProject({
+      'flows/a.yaml': [
+        'cases:',
+        '  - name: first',
+        '    steps:',
+        '      - aiAct: do something',
+        '  - name: second',
+        '    steps:',
+        '      - aiAct: never reached',
+        '',
+      ].join('\n'),
+    });
+    const { agent } = createStubAgent();
+    const controller = new AbortController();
+
+    const result = await runAndroidTestProject({
+      projectRoot: root,
+      reportDir: path.join(root, 'report'),
+      resultDir: path.join(root, 'results'),
+      createAgent: () => agent,
+      signal: controller.signal,
+      // Abort with a step in flight, which is what a person pressing stop
+      // mid-run produces. Aborting between steps takes the engine's tidy path
+      // and proves nothing; during one, it throws, and that is the case that
+      // used to lose the report.
+      onEvent: (payload) => {
+        if (payload.event === 'action' && payload.tip?.includes('aiAct')) {
+          controller.abort(new Error('stopped by the host'));
+        }
+      },
+    });
+
+    expect(result.status).toBe('failed');
+    expect(fs.existsSync(result.summaryPath)).toBe(true);
+    expect(result.reportPath).toBeTruthy();
+    expect(fs.existsSync(result.reportPath as string)).toBe(true);
+  });
+});

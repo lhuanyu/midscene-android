@@ -412,43 +412,63 @@ export async function runAndroidTestProject(
 
   let caseIndex = 0;
   for (const item of collected) {
-    options.signal?.throwIfAborted();
+    if (options.signal?.aborted) {
+      break;
+    }
     progress(`running ${item.source.sourcePath}`);
 
-    const execution = await runWorkflowDocument(item.document, {
-      resolveNode,
-      ...(options.signal ? { signal: options.signal } : {}),
-      onCaseStart: (collectedCase) => {
-        caseIndex += 1;
-        emit({
-          event: 'step.start',
-          index: caseIndex,
-          total: caseTotal,
-          // A case is the unit the person watching the phone counts, so it
-          // drives the counter; the node underneath is the finer detail.
-          phase: 'acting',
-          prompt: collectedCase.definition.name,
-          startedAt: Date.now(),
-        });
-      },
-      onStepStart: (info) => {
-        const where =
-          info.scope === 'case' ? info.case.name : info.document.sourcePath;
-        progress(`  ${item.source.sourcePath} · ${where} · ${info.node}`);
-        emit({ event: 'action', tip: `${where} · ${info.node}` });
-      },
-      onCaseResult: (result) => {
-        emit({
-          event: 'step.end',
-          status: result.status === 'success' ? 'ok' : 'error',
-          name: result.name,
-        });
-      },
-    });
+    try {
+      const execution = await runWorkflowDocument(item.document, {
+        resolveNode,
+        ...(options.signal ? { signal: options.signal } : {}),
+        onCaseStart: (collectedCase) => {
+          caseIndex += 1;
+          emit({
+            event: 'step.start',
+            index: caseIndex,
+            total: caseTotal,
+            // A case is the unit the person watching the phone counts, so it
+            // drives the counter; the node underneath is the finer detail.
+            phase: 'acting',
+            prompt: collectedCase.definition.name,
+            startedAt: Date.now(),
+          });
+        },
+        onStepStart: (info) => {
+          const where =
+            info.scope === 'case' ? info.case.name : info.document.sourcePath;
+          progress(`  ${item.source.sourcePath} · ${where} · ${info.node}`);
+          emit({ event: 'action', tip: `${where} · ${info.node}` });
+        },
+        onCaseResult: (result) => {
+          emit({
+            event: 'step.end',
+            status: result.status === 'success' ? 'ok' : 'error',
+            name: result.name,
+          });
+        },
+      });
 
-    documents.push(execution.document);
-    for (const outcome of execution.cases) {
-      cases.push({ ...outcome, documentId: execution.document.documentId });
+      documents.push(execution.document);
+      for (const outcome of execution.cases) {
+        cases.push({ ...outcome, documentId: execution.document.documentId });
+      }
+    } catch (error) {
+      if (!options.signal?.aborted) {
+        throw error;
+      }
+      // The host stopped the run and the engine aborted rather than returning
+      // what it had. Letting that propagate would skip everything below — the
+      // summary, the report, the result file — and a stopped run would leave
+      // nothing to look at, which is the opposite of why anyone stops one.
+      // The documents that already finished are still reported.
+      debugTestRunner(
+        `${item.source.sourcePath} was interrupted; reporting what had completed: ${error}`,
+      );
+      progress(
+        `stopped during ${item.source.sourcePath}; reporting what had completed`,
+      );
+      break;
     }
   }
 

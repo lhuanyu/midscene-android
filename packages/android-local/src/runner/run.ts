@@ -97,6 +97,15 @@ export interface RunLocalAgentOptions {
   /** Injectable for tests: build an agent for a device. */
   createAgent?: (device: LocalAndroidDevice, config: LocalAgentConfig) => Agent;
   onEvent?: (event: { type: string; message: string }) => void;
+  /**
+   * Stop before the next task when aborted.
+   *
+   * Between tasks, not during one: the agent has no way to cancel a model call
+   * it has already started, so the task in flight finishes and the rest are
+   * recorded as interrupted. That is what makes a stopped run still produce a
+   * result file instead of vanishing.
+   */
+  signal?: AbortSignal;
 }
 
 function buildTransport(config: LocalAgentConfig): AndroidTransport {
@@ -566,6 +575,35 @@ export async function runLocalAgentConfig(
 
   for (let index = 0; index < tasks.length; index += 1) {
     const task = tasks[index];
+
+    // A stop takes effect here, between tasks. The remaining ones are recorded
+    // rather than dropped: a run that was interrupted is still a run, and its
+    // result file is how anyone sees how far it got.
+    if (options.signal?.aborted) {
+      for (let rest = index; rest < tasks.length; rest += 1) {
+        const skipped = tasks[rest];
+        taskResults.push({
+          name: skipped.name,
+          type: skipped.type,
+          status: 'error',
+          ms: 0,
+          error: 'interrupted before this task started',
+        });
+        emitEvent(options.onEvent, {
+          event: 'step.end',
+          index: rest + 1,
+          total: tasks.length,
+          name: skipped.name,
+          status: 'error',
+          ms: 0,
+        });
+      }
+      debugRunner(
+        `stopped before task ${index + 1}/${tasks.length}; recording the rest as interrupted`,
+      );
+      break;
+    }
+
     const taskStartedAt = Date.now();
     options.onEvent?.({ type: 'task', message: `running ${task.name}` });
     emitEvent(options.onEvent, {

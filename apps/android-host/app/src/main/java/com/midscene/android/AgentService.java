@@ -28,6 +28,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Foreground service that owns agent runs.
@@ -43,6 +44,14 @@ public class AgentService extends Service {
     private static final String CHANNEL_ID = "midscene-agent";
     private static final String EVENT_MARKER = "[event] ";
     private static final int NOTIFICATION_ID = 1001;
+
+    /**
+     * How long a stopped run may take to write its report before it is killed.
+     *
+     * The stop lands between steps, so this has to cover a model call already in
+     * flight. Pressing stop again skips the wait.
+     */
+    private static final int STOP_GRACE_SECONDS = 30;
 
     public static final String ACTION_RUN_CONFIG = "com.midscene.android.RUN_CONFIG";
     public static final String ACTION_RUN_PROMPT = "com.midscene.android.RUN_PROMPT";
@@ -487,6 +496,15 @@ public class AgentService extends Service {
                     process.destroyForcibly();
                 }
             }, "run", configFile.getAbsolutePath());
+        } catch (Exception error) {
+            // Reaching here means the run ended without the CLI reporting a
+            // result — a stop that outran its grace period, or a transport that
+            // failed. Either way the run happened, and this record is the only
+            // thing that will say so: throwing it away left a stopped run with
+            // no history entry and an orphan log that the next prune deleted.
+            emit("run ended without a result: " + error);
+            Log.w(TAG, "run ended without a result", error);
+            result = ShellRunner.Result.stopped(startedAt);
         }
 
         JSONObject summary = summarize(result, configFile.getAbsolutePath());
@@ -734,7 +752,10 @@ public class AgentService extends Service {
                 task.run();
             } catch (Exception error) {
                 if (stopRequested) {
-                    emit("[" + name + "] stopped by user");
+                    // Include the error: a stop ends the run through whatever the
+                    // interrupted read threw, and saying only "stopped by user"
+                    // hid the reason a stopped run lost its bookkeeping.
+                    emit("[" + name + "] stopped by user: " + error);
                 } else {
                     emit("[" + name + "] failed: " + error);
                     Log.e(TAG, "run failed", error);
@@ -804,17 +825,67 @@ public class AgentService extends Service {
     }
 
     private void stopCurrentRun() {
-        if (worker != null && worker.isAlive()) {
-            stopRequested = true;
-            state = "stopping";
-            Process process = activeProcess;
+        if (worker == null || !worker.isAlive()) {
+            return;
+        }
+
+        Process process = activeProcess;
+
+        // A second press means the polite stop is not working, so stop waiting.
+        if (stopRequested) {
+            emit("force stopping");
             if (process != null) {
                 process.destroyForcibly();
             }
             worker.interrupt();
-            emit("stop requested");
-            updateNotification(getString(R.string.notify_state_stopping), "");
+            return;
         }
+
+        stopRequested = true;
+        state = "stopping";
+        if (process != null) {
+            // Asked to stop, not killed. Destroying a process on Android closes
+            // its pipes at once, so the CLI dies on its next line of output —
+            // before it has written the report and the summary, which are the
+            // reason to stop a run rather than walk away from it. A line on its
+            // stdin leaves the pipes alone; the watchdog below is the backstop
+            // for a run that will not take the hint.
+            try {
+                java.io.OutputStream toChild = process.getOutputStream();
+                toChild.write("stop\n".getBytes(StandardCharsets.UTF_8));
+                toChild.flush();
+            } catch (IOException error) {
+                emit("could not ask the run to stop (" + error + "); killing it");
+                process.destroy();
+            }
+            forceKillIfStillRunning(process);
+        }
+        emit("stop requested");
+        updateNotification(getString(R.string.notify_state_stopping), "");
+    }
+
+    /**
+     * The backstop for a child that ignores the polite signal.
+     *
+     * The grace period is generous because the stop lands between steps: a model
+     * call already in flight cannot be cancelled, so the wait is however long
+     * that call takes. Pressing stop again skips this.
+     */
+    private void forceKillIfStillRunning(Process process) {
+        new Thread(() -> {
+            try {
+                if (process.waitFor(STOP_GRACE_SECONDS, TimeUnit.SECONDS)) {
+                    return;
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            if (process.isAlive()) {
+                emit("stop timed out; killing the run");
+                process.destroyForcibly();
+            }
+        }, "midscene-stop-watchdog").start();
     }
 
     // -------------------------------------------------------- notification

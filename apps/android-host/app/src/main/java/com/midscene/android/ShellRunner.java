@@ -6,13 +6,21 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.InterruptedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /** Shared process plumbing: running the bundled Node CLI. */
 public final class ShellRunner {
+
+    /** How long a stopped child may take to flush before it is killed. */
+    private static final int EXIT_GRACE_SECONDS = 30;
+
+    /** Bounded so a stream that keeps reporting interruptions cannot spin. */
+    private static final int READ_RETRY_LIMIT = 200;
 
     private ShellRunner() {
     }
@@ -30,6 +38,20 @@ public final class ShellRunner {
 
         public boolean ok() {
             return exitCode == 0;
+        }
+
+        /**
+         * A run that ended without the CLI reporting anything.
+         *
+         * Used when a stop outruns the grace period or the transport fails: the
+         * caller still records the run, so `-1` is what "no exit code" looks
+         * like rather than something a shell could have produced.
+         */
+        static Result stopped(long startedAtMs) {
+            return new Result(
+                    -1,
+                    "",
+                    Math.max(0, System.currentTimeMillis() - startedAtMs));
         }
     }
 
@@ -112,7 +134,28 @@ public final class ShellRunner {
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
-                while ((line = reader.readLine()) != null) {
+                int readRetries = 0;
+                while (true) {
+                    try {
+                        line = reader.readLine();
+                    } catch (InterruptedIOException cutShort) {
+                        // Android reports a read that was cut short as an
+                        // interrupt rather than as end-of-stream. On a stop the
+                        // child is still alive and finishing — it has been asked
+                        // to write its report — and the result line this process
+                        // prints at the end travels over exactly this stream, so
+                        // giving up here throws away the run's own account of
+                        // itself. Clear the flag and read on.
+                        Thread.interrupted();
+                        readRetries += 1;
+                        if (readRetries > READ_RETRY_LIMIT) {
+                            throw cutShort;
+                        }
+                        continue;
+                    }
+                    if (line == null) {
+                        break;
+                    }
                     output.append(line).append('\n');
                     if (sink != null) {
                         sink.line(line);
@@ -131,8 +174,19 @@ public final class ShellRunner {
             return new Result(exitCode, output.toString(), System.currentTimeMillis() - startedAt);
         } finally {
             observer.onProcess(null);
+            // A child that is still alive here ended without closing its stream,
+            // which is what a stop looks like from this side. Give it the moment
+            // it needs to finish writing; killing it on the spot is what left a
+            // stopped run with no report.
             if (process.isAlive()) {
-                process.destroyForcibly();
+                try {
+                    if (!process.waitFor(EXIT_GRACE_SECONDS, TimeUnit.SECONDS)) {
+                        process.destroyForcibly();
+                    }
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    process.destroyForcibly();
+                }
             }
         }
     }
