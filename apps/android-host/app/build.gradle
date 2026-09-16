@@ -93,8 +93,8 @@ android {
         // prerelease has to sit *below* the release it precedes, or a device
         // running the candidate could not take the final build as an update;
         // 9990 + rcNumber leaves room for a few more candidates.
-        versionCode 9994
-        versionName '1.0.0-rc.4'
+        versionCode 9995
+        versionName '1.0.0-rc.5'
         // Read by the About page; the same two values name the packaged APK.
         buildConfigField 'int', 'BUILD_NUMBER', "${gitBuildNumber}"
         buildConfigField 'String', 'BUILD_TIME', "\"${buildTimeText}\""
