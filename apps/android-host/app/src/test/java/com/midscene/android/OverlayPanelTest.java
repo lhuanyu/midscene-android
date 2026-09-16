@@ -14,6 +14,10 @@ import static org.junit.Assert.assertTrue;
  * whole run — and a stop control inside it would have moved with it. These tests pin the
  * two properties that fix that: the box is a function of the screen alone, and the control
  * stays inside the box it was reserved in.
+ *
+ * The width is a function of the screen too, in the other sense: a phone keeps the compact
+ * card and a tablet gets a wider one, so the second row — the one carrying a whole sentence —
+ * is not ellipsised on the device with the most room to show it.
  */
 public class OverlayPanelTest {
 
@@ -99,9 +103,71 @@ public class OverlayPanelTest {
     }
 
     @Test
-    public void aWideScreenKeepsThePanelAtItsReadingWidth() {
+    public void aWideScreenGetsAWiderPanelThanAPhone() {
+        // 1600x2560 at 2x: 800dp across, i.e. a tablet. Compared in dp, because the card is
+        // laid out in dp — pixels differ between the two devices' densities.
         OverlayView.Panel tablet = new OverlayView.Panel(TABLET, 48, 2f);
-        assertEquals(OverlayView.Panel.WIDTH_DP * 2f, tablet.width, 0.01f);
-        assertEquals(TABLET / 2f, tablet.left + tablet.width / 2f, 0.01f);
+        OverlayView.Panel phone = new OverlayView.Panel(SCREEN, INSET, DENSITY);
+        float tabletDp = tablet.width / 2f;
+        float phoneDp = phone.width / DENSITY;
+
+        assertTrue("a tablet card is wider in dp than a phone one", tabletDp > phoneDp);
+        // 48% of 800dp, as arithmetic: a reading width, not an edge-to-edge banner.
+        assertEquals(384f, tabletDp, 0.01f);
+    }
+
+    @Test
+    public void thePhoneCardIsUnchanged() {
+        // The width the panel was tuned to on a phone is a floor, not a fraction: at 360dp
+        // (the common phone) 48% of the screen would be *narrower* than the layout has room
+        // for on one row, so the phone keeps the card it has always had.
+        OverlayView.Panel phone = new OverlayView.Panel(SCREEN, INSET, DENSITY);
+        assertEquals(OverlayView.Panel.WIDTH_DP * DENSITY, phone.width, 0.01f);
+        // 2340px at 3x is 780dp, which is past a phone: the width follows the screen dp, not
+        // a list of device names.
+        OverlayView.Panel wide = new OverlayView.Panel(2340, INSET, DENSITY);
+        assertTrue(wide.width > phone.width);
+    }
+
+    @Test
+    public void aPanelNeverWiderThanItsScreenKeepsItsMargins() {
+        // A 720px screen at 3x is 240dp: the card has to shrink to it, margins and all,
+        // rather than being drawn off the edge.
+        OverlayView.Panel small = new OverlayView.Panel(720, 48, 3f);
+        assertEquals(720f - 2 * 16f * 3f, small.width, 0.01f);
+        assertTrue(small.left >= 0f);
+        assertTrue(small.left + small.width <= 720);
+    }
+
+    @Test
+    public void wideningStopsBeforeTheCardBecomesABanner() {
+        // A desktop-sized display: the second row carries one sentence, so the card stops
+        // growing rather than spanning a screen nobody can read across.
+        OverlayView.Panel huge = new OverlayView.Panel(5120, 64, 2f);
+        assertTrue("capped", huge.width <= 460f * 2f);
+        assertTrue("but wider than a phone", huge.width > OverlayView.Panel.WIDTH_DP * 2f);
+        assertEquals(5120 / 2f, huge.left + huge.width / 2f, 0.01f);
+    }
+
+    @Test
+    public void everyScreenSizeKeepsTheControlInsideTheCard() {
+        // The stop control is placed from the same arithmetic, so widening the card must not
+        // let the button or the text column fall outside it on any of them.
+        float[] densities = {2f, 2.5f, 3f, 4f};
+        int[] screens = {720, 1080, 1440, 1600, 2560, 5120};
+        for (float density : densities) {
+            for (int screen : screens) {
+                OverlayView.Panel panel = new OverlayView.Panel(screen, 48, density);
+                assertTrue("width fits " + screen + "@" + density,
+                        panel.width > 0f && panel.left >= 0f
+                                && panel.left + panel.width <= screen);
+                assertTrue("button inside " + screen + "@" + density,
+                        panel.buttonLeft >= panel.left
+                                && panel.buttonRight(density) <= panel.left + panel.width);
+                assertTrue("text column in front of the button " + screen + "@" + density,
+                        panel.textRight(density) <= panel.buttonLeft
+                                && panel.textRight(density) > panel.innerLeft(density));
+            }
+        }
     }
 }

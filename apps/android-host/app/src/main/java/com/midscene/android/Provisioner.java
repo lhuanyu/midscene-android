@@ -60,17 +60,35 @@ public final class Provisioner {
         return new File(context.getFilesDir(), "agent");
     }
 
-    /** Installation receipt, not a substitute for checking live Shizuku binding. */
+    /**
+     * Whether the agent runtime is installed on this device.
+     *
+     * The question is "is it there", not "was the last complete verification of it done for
+     * exactly this bundle". The receipt used to be compared against the running APK's bundle
+     * stamp, which is regenerated on every build — so the first launch after any app update
+     * reported the runtime as missing even though nothing had been removed from the device,
+     * and the only way to clear it was to run the whole provisioning flow again. Nothing
+     * needed re-installing: the node binary and the agent directory survive an update, and
+     * {@link #extractAgent} re-unpacks the bundle by itself when the APK carries a newer one.
+     *
+     * The receipt still records which bundle the install was verified against, and the
+     * About page's copyable report still carries that stamp. It is simply not read here: a
+     * receipt from an older bundle says "this install has not been re-verified against the
+     * new one yet", which is not the claim "not installed" — and that claim is what pops a
+     * banner telling a user to redo an install that is already on the device and working.
+     */
     public static boolean runtimeInstalled(Context context) {
-        File receipt = new File(context.getFilesDir(), "runtime-ready");
-        try {
-            return new File(nodePath(context)).isFile() && cliFile(context).isFile()
-                    && receipt.isFile()
-                    && new String(java.nio.file.Files.readAllBytes(receipt.toPath()),
-                    java.nio.charset.StandardCharsets.UTF_8).trim().equals(runtimeStamp(context));
-        } catch (IOException error) {
-            return false;
-        }
+        return runtimePresent(new File(nodePath(context)), cliFile(context),
+                new File(context.getFilesDir(), "runtime-ready"));
+    }
+
+    /**
+     * The check above as arithmetic on three paths, so a JVM test can drive it. The receipt
+     * is the one that may legitimately be absent: it is the record of a completed install,
+     * not the install.
+     */
+    static boolean runtimePresent(File node, File cli, File receipt) {
+        return node.isFile() && cli.isFile() && receipt.isFile();
     }
 
     private static String runtimeStamp(Context context) {
@@ -94,12 +112,10 @@ public final class Provisioner {
         File stampFile = new File(agentDir(context), ".bundle-info");
         String installed = stampFile.isFile() ? ShellRunner.readText(stampFile).trim() : "";
 
-        if (cliFile(context).exists() && !stamp.isEmpty() && stamp.equals(installed)) {
-            log.log("agent bundle up to date (" + stamp + ")");
-            return false;
-        }
-        if (cliFile(context).exists() && stamp.isEmpty()) {
-            log.log("agent bundle already extracted (no stamp in APK)");
+        if (!bundleIsStale(cliFile(context), stamp, installed)) {
+            log.log(stamp.isEmpty()
+                    ? "agent bundle already extracted (no stamp in APK)"
+                    : "agent bundle up to date (" + stamp + ")");
             return false;
         }
 
@@ -158,6 +174,31 @@ public final class Provisioner {
         log.log("extracted agent bundle in " + (System.currentTimeMillis() - startedAt)
                 + " ms (" + (stamp.isEmpty() ? "unstamped" : stamp) + ")");
         return true;
+    }
+
+    /**
+     * Whether the extracted bundle has to be replaced by the one in the APK.
+     *
+     * The truth is the stamp file written next to the extracted CLI — not the
+     * {@code runtime-ready} receipt, which records a completed install and may be missing
+     * on a device whose bundle is perfectly current.
+     *
+     * Three states, and only two of them are "stale": nothing where the CLI belongs (there
+     * is nothing to run), and a bundle extracted from a different stamp. A bundle whose own
+     * stamp file is gone is counted as stale rather than up to date — the branch that used to
+     * sit here treated "CLI present, stamp file absent" as current, which is exactly what an
+     * unpack interrupted between writing the files and writing the stamp looks like.
+     */
+    static boolean bundleIsStale(File cli, String stamp, String installed) {
+        if (!cli.isFile()) {
+            return true;
+        }
+        if (stamp.isEmpty()) {
+            // An APK without a stamp cannot say what it carries, so an extracted bundle is
+            // left alone: re-extracting on every launch is worse than running the one there.
+            return false;
+        }
+        return !stamp.equals(installed);
     }
 
     private static void restoreLinks(File root) throws IOException {

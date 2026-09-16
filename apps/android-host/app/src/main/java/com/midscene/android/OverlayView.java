@@ -115,17 +115,27 @@ public final class OverlayView {
     /**
      * The panel's box and its stop control's box, in screen pixels.
      *
-     * The size is a function of the screen, never of the text. Timings tick ("9s" → "10s"),
-     * a step line grows and shrinks between steps, and a card that was sized to its content
-     * therefore resized and re-centred every second — the twitching this replaces. A fixed
-     * box also gives the stop control a position that does not move under the user's finger.
+     * The size is a function of the screen, never of the text — and the width is a function
+     * of how much screen there is. Timings tick ("9s" → "10s"), a step line grows and shrinks
+     * between steps, and a card sized to its content therefore resized and re-centred every
+     * second: that twitching is what this replaces. A fixed box also gives the stop control a
+     * position that does not move under the user's finger.
      *
      * Pure arithmetic on purpose: a unit test holds the two properties that matter, that the
      * box ignores the text and that the button stays inside the card.
      */
     static final class Panel {
 
+        /** The width a phone gets: what the compact card was tuned to. */
         static final float WIDTH_DP = 280f;
+        /**
+         * How much of a wider screen the card may use. A tablet is otherwise all margin: at
+         * 280dp the second row — the one carrying a whole sentence — is ellipsised on the
+         * device with the most room to show it.
+         */
+        private static final float WIDTH_FRACTION = 0.48f;
+        /** Where widening stops being useful: this is a status line, not a paragraph. */
+        private static final float MAX_WIDTH_DP = 460f;
         static final float PAD_DP = 13f;
         static final float ROW_HEIGHT_DP = 19f;
         static final float DETAIL_HEIGHT_DP = 17f;
@@ -148,7 +158,13 @@ public final class OverlayView {
 
         Panel(int screenWidth, int systemInsetTop, float density) {
             float margin = MARGIN_DP * density;
-            width = Math.min(WIDTH_DP * density, Math.max(screenWidth - 2 * margin, 0f));
+            float screenWidthDp = screenWidth / density;
+            // Widen with the screen, between the phone width and a ceiling: the card carries
+            // one sentence per row, so past MAX_WIDTH_DP the extra pixels only add travel for
+            // the eye. Still shrunk to the surface when that is narrower than the screen.
+            float wanted = Math.min(
+                    Math.max(screenWidthDp * WIDTH_FRACTION, WIDTH_DP), MAX_WIDTH_DP) * density;
+            width = Math.min(wanted, Math.max(screenWidth - 2 * margin, 0f));
             // Both rows always exist, empty or not: a card that grew a row when a step
             // description arrived would move the stop control down by 22dp mid-run.
             height = (PAD_DP * 2 + ROW_HEIGHT_DP + ROW_GAP_DP + DETAIL_HEIGHT_DP) * density;
