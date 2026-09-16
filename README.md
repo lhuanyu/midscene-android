@@ -30,12 +30,24 @@ natural language / YAML ──► on-device agent ──► screen understanding
 
 ## Why on-device
 
-| | On-device (this project) | Cloud / device farm |
-|---|---|---|
-| Where your data goes | **Stays on the device** (only model requests go to the endpoint you configure) | Screenshots uploaded to a third party |
-| Visibility | **An overlay is visible for the whole run, interruptible at any time** | Runs remotely; nobody in front of the phone knows |
-| Needs a computer | **No** | Yes (or a hosted service) |
-| Debugging | Logs and reports on the phone | Round trips to the cloud |
+Android UI automation normally means one of two things: a script on a computer
+driving the phone over a cable, or a device farm where the phone sits in someone
+else's rack. This project is a third — the agent runs on the phone — and almost
+everything below follows from one fact: **you do not need the computer.**
+
+|  | This project | Computer and a cable | Device farm |
+|---|---|---|---|
+| To run it you need | the phone | a computer, a cable, adb | an account, and someone else's phone |
+| The run is | on the phone's own screen, watched and stopped by hand | on the phone, driven from the computer | on a phone you cannot see |
+| Leaves the device | the prompt and the screenshots, to the model endpoint you configure | the same | the same, plus whatever the vendor keeps |
+| At once | one phone | one phone per computer | as many as you rent |
+
+**Where the other two are better.** Writing and debugging a suite is nicer on a
+computer: a real editor, a real debugger, logs you can grep. And only a farm runs
+twenty phones at once. If that is what you need, use one of those.
+
+**What this is for.** One phone — in your hand, or somewhere with no computer
+near it — running a check now, and leaving a report you can read on the spot.
 
 **Design commitments (not just features)**
 
