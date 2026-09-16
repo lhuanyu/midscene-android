@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, test } from '@rstest/core';
+import { afterEach, describe, expect, rstest, test } from '@rstest/core';
 
 import {
   loadLocalAgentConfig,
@@ -404,5 +404,130 @@ describe('local agent runner', () => {
     // Not resolved against process.cwd(), which differs inside the Android app.
     expect(result.resultFile).toContain(path.join(dir, 'reports'));
     expect(fs.existsSync(result.resultFile as string)).toBe(true);
+  });
+});
+
+describe('YAML overlay locations', () => {
+  async function runWithDumps(dumps: unknown[], shrink = 1) {
+    const events: Record<string, any>[] = [];
+    const write = rstest
+      .spyOn(process.stdout, 'write')
+      .mockImplementation((chunk) => {
+        const line = String(chunk);
+        if (line.startsWith('[event] ')) events.push(JSON.parse(line.slice(8)));
+        return true;
+      });
+    const { agent: base } = createRecordingAgent();
+    const agent = {
+      ...base,
+      onDumpUpdate: undefined as
+        | undefined
+        | ((tag: string, dump: unknown) => void),
+      async runYaml() {
+        for (const dump of dumps)
+          agent.onDumpUpdate?.('serialized report', dump);
+      },
+    };
+    try {
+      const result = await runLocalAgentConfig(
+        localAgentConfigSchema.parse({
+          agent: {
+            generateReport: false,
+            resetToHome: false,
+            screenshotShrinkFactor: shrink,
+          },
+          tasks: [{ name: 'yaml', type: 'yaml', script: 'tasks: []' }],
+        }),
+        {
+          createTransport: createStubTransport,
+          createAgent: () => agent as never,
+        },
+      );
+      expect(result.ok).toBe(true);
+      return events;
+    } finally {
+      write.mockRestore();
+    }
+  }
+
+  const dump = (id: string, element: unknown) => ({
+    id,
+    tasks: [{ type: 'Locate', status: 'finished', output: { element } }],
+  });
+
+  test('renders point-only YAML locations and refreshes repeated targets in later actions', async () => {
+    const first = dump('tap-1', { center: [540, 2203] });
+    const events = await runWithDumps([
+      first,
+      first,
+      dump('tap-2', { center: [540, 2203] }),
+    ]);
+    const locations = events.filter((event) => event.event === 'locate');
+    expect(locations).toHaveLength(2);
+    expect(locations[0].rect).toEqual({ x: 516, y: 2179, w: 48, h: 48 });
+    expect(events.filter((event) => event.event === 'tap')).toEqual([
+      { event: 'tap', x: 540, y: 2203 },
+      { event: 'tap', x: 540, y: 2203 },
+    ]);
+  });
+
+  test('preserves real bounds and scales screenshot coordinates back to the device', async () => {
+    const events = await runWithDumps(
+      [
+        dump('tap', {
+          center: [100, 200],
+          rect: { left: 80, top: 190, width: 40, height: 20 },
+        }),
+      ],
+      2,
+    );
+    expect(events.find((event) => event.event === 'locate')?.rect).toEqual({
+      x: 160,
+      y: 380,
+      w: 80,
+      h: 40,
+    });
+    expect(events.find((event) => event.event === 'tap')).toEqual({
+      event: 'tap',
+      x: 200,
+      y: 400,
+    });
+  });
+
+  test('uses the latest point instead of an older rectangle and keeps marker size constant', async () => {
+    const events = await runWithDumps(
+      [
+        {
+          id: 'yaml',
+          tasks: [
+            {
+              output: {
+                element: { rect: { left: 10, top: 20, width: 30, height: 40 } },
+              },
+            },
+            { output: { element: { center: [100, 200] } } },
+          ],
+        },
+      ],
+      2,
+    );
+    expect(events.find((event) => event.event === 'locate')?.rect).toEqual({
+      x: 176,
+      y: 376,
+      w: 48,
+      h: 48,
+    });
+  });
+
+  test('ignores missing and non-finite locations', async () => {
+    const events = await runWithDumps([
+      dump('empty', {}),
+      dump('invalid', { center: [Number.NaN, Number.POSITIVE_INFINITY] }),
+    ]);
+    expect(
+      events.filter(
+        (event) => event.event === 'locate' || event.event === 'tap',
+      ),
+    ).toEqual([]);
   });
 });

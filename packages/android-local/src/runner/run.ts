@@ -295,37 +295,6 @@ function toPlain(
   return out;
 }
 
-/** [x, y] points published as `point`, `center` or `coordinates`. */
-function collectPoints(
-  node: unknown,
-  found: Array<[number, number]> = [],
-): Array<[number, number]> {
-  if (Array.isArray(node)) {
-    const numbers = node.filter(
-      (item): item is number => typeof item === 'number',
-    );
-    if (
-      node.length === numbers.length &&
-      node.length >= 2 &&
-      node.length <= 4
-    ) {
-      found.push([numbers[0], numbers[1]]);
-      return found;
-    }
-    for (const item of node) {
-      collectPoints(item, found);
-    }
-    return found;
-  }
-  if (!node || typeof node !== 'object') {
-    return found;
-  }
-  for (const value of Object.values(node as Record<string, unknown>)) {
-    collectPoints(value, found);
-  }
-  return found;
-}
-
 function collectRects(node: unknown, found: LocatedRect[] = []): LocatedRect[] {
   if (Array.isArray(node)) {
     for (const item of node) {
@@ -340,6 +309,13 @@ function collectRects(node: unknown, found: LocatedRect[] = []): LocatedRect[] {
   const record = node as Record<string, unknown>;
   const number = (value: unknown): number | undefined =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+  // A located element keeps its rect beside its center. Read them together so
+  // a nested rect does not lose the center or create a second candidate.
+  if (record.rect && typeof record.rect === 'object') {
+    collectRects({ ...record.rect, center: record.center }, found);
+    return found;
+  }
 
   const x = number(record.x) ?? number(record.left);
   const y = number(record.y) ?? number(record.top);
@@ -383,7 +359,7 @@ function collectRects(node: unknown, found: LocatedRect[] = []): LocatedRect[] {
  * Report the located element to the host.
  *
  * Coordinates live in the screenshot the model saw, which Midscene scales by
- * `screenshotShrinkFactor`, so they are divided back into screen pixels here (the
+ * `screenshotShrinkFactor`, so they are multiplied back into screen pixels here (the
  * transport owns the screen geometry; this keeps the mapping next to the config that
  * caused it).
  */
@@ -427,29 +403,34 @@ function attachLocationReporting(
           })}\n`,
         );
       }
-      const rects = collectRects(toPlain(tree)).filter(
-        (rect) => rect.w > 0 && rect.h > 0,
-      );
+      const rects = collectRects(toPlain(tree));
       const latest = rects[rects.length - 1];
       if (!latest) {
         return;
       }
 
-      const key = `${latest.x},${latest.y},${latest.w},${latest.h}`;
+      const dump = tree as { id?: string; tasks?: unknown[] };
+      const key = `${dump.id},${dump.tasks?.length},${latest.x},${latest.y},${latest.w},${latest.h}`;
       if (key === lastKey) {
         return;
       }
       lastKey = key;
 
-      const scale = (value: number) => Math.round(value / shrink);
+      const scale = (value: number) => Math.round(value * shrink);
+      // Point-only models have no element bounds. Draw a fixed-size screen-space
+      // marker centered on the target instead of discarding the location.
+      const rect =
+        latest.w > 0 && latest.h > 0
+          ? {
+              x: scale(latest.x),
+              y: scale(latest.y),
+              w: scale(latest.w),
+              h: scale(latest.h),
+            }
+          : { x: scale(latest.x) - 24, y: scale(latest.y) - 24, w: 48, h: 48 };
       emitEvent(onEvent, {
         event: 'locate',
-        rect: {
-          x: scale(latest.x),
-          y: scale(latest.y),
-          w: scale(latest.w),
-          h: scale(latest.h),
-        },
+        rect,
         screenshot: { x: latest.x, y: latest.y, w: latest.w, h: latest.h },
         shrink,
       });
