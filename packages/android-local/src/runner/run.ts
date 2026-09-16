@@ -244,24 +244,53 @@ interface LocatedRect {
 /**
  * Copy a live object tree into plain objects.
  *
- * The runtime dump holds class instances whose geometry sits behind prototype
- * getters, which `Object.values` never sees; `for...in` walks those, and the depth
- * cap keeps a cyclic or very deep tree from exploding.
+ * The dump is a tree of class instances, and their data is not reachable the
+ * obvious ways: `Object.values` misses prototype getters, and `for...in` — which
+ * this used to use — additionally misses non-enumerable properties and private
+ * fields. Midscene keeps the located element's geometry behind exactly those, so
+ * every dump produced zero rects and the overlay never had a box to draw, in
+ * both the task runner and the YAML runner.
+ *
+ * So walk own property *names* up the prototype chain instead, and read each one
+ * through the object rather than the descriptor, which is what invokes getters.
+ * `seen` stops a cycle from being walked forever, and the depth cap is the
+ * backstop for a tree that is merely very deep.
  */
-function toPlain(node: unknown, depth = 0): unknown {
-  if (depth > 9 || node === null || typeof node !== 'object') {
+function toPlain(
+  node: unknown,
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet(),
+): unknown {
+  if (depth > 12 || node === null || typeof node !== 'object') {
     return node;
   }
-  if (Array.isArray(node)) {
-    return node.map((item) => toPlain(item, depth + 1));
+  if (seen.has(node)) {
+    return undefined;
   }
+  seen.add(node);
+
+  if (Array.isArray(node)) {
+    return node.map((item) => toPlain(item, depth + 1, seen));
+  }
+
   const out: Record<string, unknown> = {};
-  for (const key in node as Record<string, unknown>) {
-    try {
-      out[key] = toPlain((node as Record<string, unknown>)[key], depth + 1);
-    } catch {
-      // a throwing getter is not worth failing the run over
+  let current: object | null = node;
+  while (current && current !== Object.prototype) {
+    for (const key of Object.getOwnPropertyNames(current)) {
+      if (key === 'constructor' || key in out) {
+        continue;
+      }
+      try {
+        out[key] = toPlain(
+          (node as Record<string, unknown>)[key],
+          depth + 1,
+          seen,
+        );
+      } catch {
+        // a throwing getter is not worth failing the run over
+      }
     }
+    current = Object.getPrototypeOf(current);
   }
   return out;
 }
@@ -377,14 +406,24 @@ function attachLocationReporting(
         return;
       }
       dumpCount += 1;
+      // Kept deliberately small, but kept: this count is the only way to tell
+      // from a log whether a dump carried geometry at all. It read zero for
+      // every dump in both runners, which is what said the overlay's empty box
+      // was a data problem and not a drawing one.
       if (dumpCount <= 2) {
-        const rects = collectRects(toPlain(tree));
+        const plain = toPlain(tree);
+        const tasks = Array.isArray((plain as { tasks?: unknown[] }).tasks)
+          ? ((plain as { tasks: unknown[] }).tasks as unknown[])
+          : [];
         process.stdout.write(
           `[event] ${JSON.stringify({
             event: 'debug.dump',
             n: dumpCount,
-            rects: rects.length,
-            sample: rects.slice(-1),
+            rects: collectRects(plain).length,
+            tasks: tasks.map((task) => {
+              const record = (task ?? {}) as Record<string, unknown>;
+              return `${String(record.status)}/${String(record.type)}`;
+            }),
           })}\n`,
         );
       }
@@ -465,12 +504,25 @@ async function runTask(
   agent: Agent,
   task: LocalAgentTask,
   configPath: string | undefined,
+  signal: AbortSignal | undefined,
 ): Promise<unknown> {
+  /**
+   * The agent can cancel a call that is already in flight, but only if it is
+   * handed the signal. Without this, a stop could only take effect once the
+   * running `aiAct` finished on its own — measured at 95 seconds on a two-step
+   * instruction, which is long enough that people conclude the stop did not
+   * work and kill the app, losing the report the stop was meant to produce.
+   *
+   * Only these two take the option; a query or a YAML script runs to the end.
+   */
+  const abort = signal ? { abortSignal: signal } : undefined;
   switch (task.type) {
     case 'aiAct':
-      return await agent.aiAct(requirePrompt(task));
+      return await agent.aiAct(requirePrompt(task), abort);
     case 'aiAssert':
-      return await agent.aiAssert(requirePrompt(task));
+      // The options are the third parameter here; the second one is the message
+      // a failed assertion shows, which this runner does not set.
+      return await agent.aiAssert(requirePrompt(task), undefined, abort);
     case 'aiQuery':
       return await agent.aiQuery(requirePrompt(task));
     case 'yaml': {
@@ -635,7 +687,7 @@ export async function runLocalAgentConfig(
 
       let output: unknown;
       try {
-        output = await runTask(agent, task, options.configPath);
+        output = await runTask(agent, task, options.configPath, options.signal);
       } finally {
         agent.onTaskStartTip = previousTip;
       }
@@ -819,11 +871,23 @@ export async function runLocalAgentTestConfig(
       // One agent per case attempt, each with its own report file. A run-wide
       // agent would hand the same report to every scope and the assembler
       // rejects that outright.
-      createAgent: (runId) =>
-        new OnDeviceAndroidAgent(agentDevice, {
+      createAgent: (runId) => {
+        const agent = new OnDeviceAndroidAgent(agentDevice, {
           ...agentOpts,
           reportFileName: `android-test-${runId}`,
-        }),
+        });
+        // Feed the host's overlay from this agent too. Every YAML step goes
+        // through an agent the runner builds itself, so without this the dashed
+        // box and the tap ripple had no events at all and a YAML run looked
+        // like it was doing nothing. The callback argument is unused:
+        // `attachLocationReporting` writes the events to stdout.
+        attachLocationReporting(
+          agent,
+          config.agent.screenshotShrinkFactor,
+          undefined,
+        );
+        return agent;
+      },
       runAdbShell: test.runAdbShell,
       projectName: config.name,
       ...(test.include ? { include: test.include } : {}),
