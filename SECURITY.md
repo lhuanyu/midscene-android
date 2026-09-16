@@ -75,10 +75,10 @@ connect to that server and inherit the shell uid it exposes.
 Settings. It uses a binder plus an explicit per-app grant, with no network
 listener at all.
 
-**Planned before the first public release** (see `ROADMAP.md`, blocker 2): make
-Shizuku the default channel, bind explicitly with `-L 127.0.0.1:<port>`, scope the
-server's lifetime to a run instead of leaving it resident, and surface the caveat
-in the UI.
+**Planned, in order of what it buys:** make Shizuku the default channel, scope the
+server's lifetime to a run instead of leaving it resident, bind explicitly with
+`-L 127.0.0.1:<port>`, and surface the caveat in the UI where the channel is
+chosen.
 
 Note that a **random port is not a fix**: adb rejects port 0, and loopback is
 scannable — that would be obscurity, not a boundary.
@@ -121,7 +121,29 @@ which other apps cannot read directly (unless the device is rooted).
 **Do not use a production key on a device you do not trust.** Using a key scoped
 to the device or purpose significantly reduces the impact.
 
-### 5. Native runtime comes from prebuilt third-party packages (supply chain)
+### 5. Cleartext HTTP is allowed for model endpoints (low, opt-in by configuration)
+
+The app sets `usesCleartextTraffic="true"` and ships no network security config, so
+a Base URL that starts with `http://` is accepted and the API key, the prompts and
+the screenshots travel unencrypted. The field is free text, so this is one typo —
+or one self-hosted gateway — away from happening.
+
+**Status: not restricted.** Android's default for a `targetSdk` this recent is to
+refuse cleartext; this app opts out of that.
+
+- **Nothing is wrong with `https://`**: there is no `TrustManager` or
+  `HostnameVerifier` anywhere in the tree, so certificate validation is the
+  platform's.
+- A plain-HTTP endpoint still works, and the app does not warn.
+
+**If you want to be sure:** use an `https://` Base URL. That is the only case this
+app needs.
+
+**Planned:** set it to `false` and add a scoped allow-list, so a self-hosted
+plain-HTTP gateway is a deliberate exception rather than the default for
+everything.
+
+### 6. Native runtime comes from prebuilt third-party packages (supply chain)
 
 The Node runtime and adb client come from Termux's arm64 packages. We **pin and
 verify SHA-256 digests**, but we are not responsible for how those upstream
@@ -129,10 +151,12 @@ packages are built. The digests can be audited in
 `apps/android-host/scripts/fetch-node-runtime.sh` and `fetch-adb-runtime.sh`.
 
 The `yadb` helper (CJK text input and pinch gestures) is a third-party prebuilt
-binary that ships as an app asset. Its upstream licence and provenance still need
-to be documented before the first public release.
+binary that ships as an app asset. It is **LGPL-3.0** (upstream
+[`ysbing/YADB`](https://github.com/ysbing/YADB)), which is copyleft: redistributing
+it inside this APK carries obligations beyond crediting it, and the project intends
+to stop shipping it and let users who want CJK input place it themselves.
 
-### 6. A YAML test file can run shell commands, if you let it (opt-in)
+### 7. A YAML test file can run shell commands, if you let it (opt-in)
 
 `@midscene/test` projects run YAML files, and one of the available steps,
 `runAdbShell`, executes an arbitrary shell command as the shell user. That is a
