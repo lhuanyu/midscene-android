@@ -5,29 +5,33 @@
 One instruction, typed on the car's own screen. No computer, no cable, no adb
 from a laptop:
 
+> Open the App Centre, find QQ Music, open it and search for Coldplay, play the
+> first song in the results.
+
+In the app's own language, which is what the video shows:
+
 > 打开应用中心，找到QQ音乐，打开搜索Coldplay，播放搜索结果的第一首歌曲。
 
 <p align="center">
   <a href="demo-1080p.mp4">
-    <img src="poster.jpg" width="720" alt="Midscene on a HarmonyOS car head unit: the instruction 打开应用中心，找到QQ音乐，打开搜索Coldplay，播放搜索结果的第一首歌曲。 typed into the app, with the 运行 button below it">
+    <img src="poster.jpg" width="720" alt="Midscene on a HarmonyOS car head unit: the Chinese instruction typed into the app, with the Run button below it">
   </a>
 </p>
 
 **[▶ Watch the 2m20s clip (23 MB, 1080p)](demo-1080p.mp4)** · **[4K original (572 MB)](https://github.com/lhuanyu/midscene-android/releases/tag/demo-v1)**
 
 GitHub strips `<video>` out of markdown, so a repository README cannot play an
-MP4 in place. The poster above is the entry point: clicking it opens the clip in
-the browser's own player, where it streams from GitHub like any other file. The
-clip is committed here precisely so that entry point exists; the 4K original is
-a release asset, for the reason below.
+MP4 in place. The poster above is the entry point: clicking it opens the
+committed clip. The clip is committed here precisely so that entry point exists;
+the 4K original is a release asset, for the reason below.
 
 ## What this run is
 
 | | |
 |---|---|
-| Device | 鸿蒙车机 (HarmonyOS car head unit) |
+| Device | A 鸿蒙车机 (a HarmonyOS car head unit) |
 | Android reported by the device | Android 12 |
-| Instruction language | Chinese, as typed above |
+| Instruction language | Chinese, as quoted above |
 | Model behind the agent | `qwen3.8-flash` |
 | Result | one task, exit 0, run time reported by the app as 120s |
 | Footage | 2m20s, 4K (3840x2160) HEVC, recorded off the screen |
@@ -39,30 +43,30 @@ is wall-clock time for the whole instruction, not the sum of the taps.
 
 | Time in the video | On screen |
 |---|---|
-| 0:00 | The instruction typed into the app's 指令 field, then 运行 |
-| 0:02 – 0:03 | Run starts; the progress overlay pins the instruction and a 停止 button on top of everything else |
-| 0:05 – 0:20 | The agent leaves the app on its own: opens 应用中心, locates QQ音乐, taps it |
-| 0:20 – 0:50 | Inside QQ音乐: opens search, brings up the keyboard |
+| 0:00 | The instruction typed into the app's prompt field, then **Run** |
+| 0:02 – 0:03 | Run starts; the progress overlay pins the instruction and a **Stop** button on top of everything else |
+| 0:05 – 0:20 | The agent leaves the app on its own: opens the App Centre, locates QQ Music, taps it |
+| 0:20 – 0:50 | Inside QQ Music: opens search, brings up the keyboard |
 | 0:50 – 1:10 | Types `Coldplay`, submits, waits for results |
 | 1:10 – 1:55 | Picks the first search result and starts playback |
-| 1:55 – 2:20 | Back in the app: 历史 shows the finished run, opens its report |
+| 1:55 – 2:20 | Back in the app: **History** shows the finished run, opens its report |
 
-The screen is never touched after 运行. The overlay stays visible throughout —
-that 停止 button is the way out at any point.
+The screen is never touched after **Run**. The overlay stays visible throughout —
+that **Stop** button is the way out at any point.
 
 ## The files here
 
 | File | What it is |
 |---|---|
-| `demo-1080p.mp4` | 1920x1080 H.264, 23 MB — the copy that plays inline above and that lives in this repository |
+| `demo-1080p.mp4` | 1920x1080 H.264, 23 MB — the clip the poster above links to |
 | `poster.jpg` | 1920x1080 poster frame |
-| 4K original | [Release `demo-v1`](https://github.com/lhuoanyu/midscene-android/releases/tag/demo-v1) |
+| 4K original | [Release `demo-v1`](https://github.com/lhuanyu/midscene-android/releases/tag/demo-v1) |
 
 The 4K original is a 572 MB (600,078,490 bytes) file and is **not** in git —
 a file that size would sit in every clone forever. Instead:
 
-- The **repository copy** is the 1080p transcode, small enough to be a normal
-  part of the repo and to play in the page above.
+- The **repository copy** is the 1080p transcode: small enough to be an ordinary
+  part of the repo, and the thing the poster links to.
 - The **4K original** is a release asset. Release assets are served separately
   from the git history, so downloading it costs the cloner nothing.
 
@@ -93,8 +97,8 @@ copy keeps a silent AAC track rather than pretending there is narration.
 
 ## Scope of this demo
 
-It shows the 运行 path: one natural-language instruction, one phone, one
-finished report. It does not show 脚本 / YAML scripts, multi-task runs, or
+It shows the **Run** path: one natural-language instruction, one phone, one
+finished report. It does not show **Scripts** / YAML scripts, multi-task runs, or
 stopping a run midway — those are documented in the [main
 README](../../README.md).
 
