@@ -63,7 +63,8 @@ Android UI 自动化通常只有两条路：在电脑上写脚本、用数据线
 鸿蒙车机（Android 12）上输入一条指令，背后是
 `qwen3.8-flash`：打开应用中心，找到QQ音乐，打开搜索Coldplay，播放搜索结果的第一首歌曲。
 应用中心是智能体自己找到的，搜索是在 QQ音乐 里完成的，播放的是搜索结果第一条 ——
-点下「运行」之后屏幕再没被碰过。片段从本仓库直接内嵌播放；[4K 原片](https://github.com/lhuanyu/midscene-android/releases/tag/demo-v1)
+点下「运行」之后屏幕再没被碰过。1080p 片段提交在 `docs/demo/` 下，在浏览器播放器里
+播放；[4K 原片](https://github.com/lhuanyu/midscene-android/releases/tag/demo-v1)
 是 release 附件，有意不进 git。
 
 ## 安装

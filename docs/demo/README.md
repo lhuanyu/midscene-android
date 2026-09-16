@@ -8,11 +8,18 @@ from a laptop:
 > 打开应用中心，找到QQ音乐，打开搜索Coldplay，播放搜索结果的第一首歌曲。
 
 <p align="center">
-  <video src="demo-1080p.mp4" poster="poster.jpg" width="720" controls muted playsinline>
-    Your browser cannot play this video inline.
-    <a href="demo-1080p.mp4">Download the 1080p clip (23 MB)</a>.
-  </video>
+  <a href="demo-1080p.mp4">
+    <img src="poster.jpg" width="720" alt="Midscene on a HarmonyOS car head unit: the instruction 打开应用中心，找到QQ音乐，打开搜索Coldplay，播放搜索结果的第一首歌曲。 typed into the app, with the 运行 button below it">
+  </a>
 </p>
+
+**[▶ Watch the 2m20s clip (23 MB, 1080p)](demo-1080p.mp4)** · **[4K original (572 MB)](https://github.com/lhuanyu/midscene-android/releases/tag/demo-v1)**
+
+GitHub strips `<video>` out of markdown, so a repository README cannot play an
+MP4 in place. The poster above is the entry point: clicking it opens the clip in
+the browser's own player, where it streams from GitHub like any other file. The
+clip is committed here precisely so that entry point exists; the 4K original is
+a release asset, for the reason below.
 
 ## What this run is
 

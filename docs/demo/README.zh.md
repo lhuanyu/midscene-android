@@ -7,11 +7,17 @@
 > 打开应用中心，找到QQ音乐，打开搜索Coldplay，播放搜索结果的第一首歌曲。
 
 <p align="center">
-  <video src="demo-1080p.mp4" poster="poster.jpg" width="720" controls muted playsinline>
-    你的浏览器无法内嵌播放这个视频。
-    <a href="demo-1080p.mp4">下载 1080p 片段（23 MB）</a>。
-  </video>
+  <a href="demo-1080p.mp4">
+    <img src="poster.jpg" width="720" alt="Midscene 跑在鸿蒙车机上：应用里输入了指令「打开应用中心，找到QQ音乐，打开搜索Coldplay，播放搜索结果的第一首歌曲。」，下面是「运行」按钮">
+  </a>
 </p>
+
+**[▶ 看这 2 分 20 秒的片段（23 MB，1080p）](demo-1080p.mp4)** · **[4K 原片（572 MB）](https://github.com/lhuanyu/midscene-android/releases/tag/demo-v1)**
+
+GitHub 会把 `<video>` 从 markdown 里过滤掉，所以仓库的 README 没法就地播放
+MP4。上面这张封面就是入口：点它，片段在浏览器自带的播放器里打开，像其他文件一样
+从 GitHub 流式播放。把它提交进仓库，正是为了让这个入口存在；4K 原片走 release
+附件，原因见下。
 
 ## 这次运行是什么
 

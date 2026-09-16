@@ -67,8 +67,9 @@ near it — running a check now, and leaving a report you can read on the spot.
 **[Watch the demo (2m20s) →](docs/demo/)** — a 鸿蒙车机 (Android 12)
 given one instruction, driven by `qwen3.8-flash`: 打开应用中心，找到QQ音乐，打开搜索Coldplay，播放搜索结果的第一首歌曲。
 The agent finds the app centre itself, searches inside QQ Music, and starts the
-first result — the screen is not touched after 运行. The clip plays inline from
-this repository; the [4K original](https://github.com/lhuanyu/midscene-android/releases/tag/demo-v1)
+first result — the screen is not touched after 运行. The 1080p clip is committed
+under `docs/demo/` and plays in the browser's player; the
+[4K original](https://github.com/lhuanyu/midscene-android/releases/tag/demo-v1)
 is a release asset, kept out of git on purpose.
 
 ## Install
