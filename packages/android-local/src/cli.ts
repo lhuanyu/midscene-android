@@ -13,6 +13,7 @@ import process from 'node:process';
 
 import { loadLocalAgentConfig } from './config/schema';
 import type { LocalAgentConfig } from './config/schema';
+import { withRunCancellation } from './runner/cancellation';
 import {
   runLocalAgentConfigFile,
   runLocalAgentTestConfigFile,
@@ -209,44 +210,6 @@ async function doctor(flags: Record<string, string>): Promise<number> {
   }
 }
 
-/**
- * Stop when the host asks, without the host having to kill this process.
- *
- * The host app stops a run by signalling the child. Killing it does not work:
- * destroying a process on Android closes its pipes immediately, so the next line
- * this CLI writes fails and it dies wherever it happened to be — before it has
- * written the report and the summary, which are the two things a person wants
- * after stopping a run. A line on stdin leaves the pipes intact and lets the run
- * finish at the next step boundary.
- *
- * A terminal is not a control channel, so this only listens when stdin is a pipe.
- */
-function abortOnHostRequest(controller: AbortController): void {
-  const stdin = process.stdin;
-  if (stdin.isTTY) {
-    return;
-  }
-
-  stdin.setEncoding('utf8');
-  stdin.on('data', (chunk: string) => {
-    if (!chunk.includes('stop')) {
-      return;
-    }
-    console.error(
-      '[midscene-local] stop requested by the host: finishing the current step, then writing the report',
-    );
-    controller.abort(new Error('stopped by the host'));
-  });
-  stdin.resume();
-  controller.signal.addEventListener(
-    'abort',
-    () => {
-      stdin.destroy();
-    },
-    { once: true },
-  );
-}
-
 async function run(configPath: string | undefined): Promise<number> {
   if (!configPath) {
     console.error('run requires a config file path\n');
@@ -267,54 +230,21 @@ async function run(configPath: string | undefined): Promise<number> {
     return await runTestConfig(configPath, config);
   }
 
-  const controller = abortOnSignal();
-  abortOnHostRequest(controller);
-  const result = await runLocalAgentConfigFile(configPath, {
-    signal: controller.signal,
-    onEvent: (event) => {
-      if (event.type !== 'task') {
-        console.error(`[${event.type}] ${event.message}`);
-      } else {
-        console.error(`[task] ${event.message}`);
-      }
-    },
+  return await withRunCancellation(async (signal) => {
+    const result = await runLocalAgentConfigFile(configPath, {
+      signal,
+      onEvent: (event) => {
+        if (event.type !== 'task') {
+          console.error(`[${event.type}] ${event.message}`);
+        } else {
+          console.error(`[task] ${event.message}`);
+        }
+      },
+    });
+
+    console.log(JSON.stringify(result, null, 2));
+    return result.ok ? 0 : 1;
   });
-
-  console.log(JSON.stringify(result, null, 2));
-  return result.ok ? 0 : 1;
-}
-
-/**
- * Turn a termination signal into an abort instead of an immediate death.
- *
- * The host app stops a run by killing this process, and killing it outright
- * means the run leaves no report and no summary — the two things a person most
- * wants after stopping something that was going wrong. Handling SIGTERM lets
- * the run stop at the next step boundary and still write both; the app waits a
- * moment for that and force-kills if it takes too long.
- *
- * The handlers are removed once the abort is under way, so a second signal
- * terminates immediately: a run that will not stop can still be killed.
- */
-function abortOnSignal(): AbortController {
-  const controller = new AbortController();
-  const handler = (signal: NodeJS.Signals) => {
-    console.error(
-      `[midscene-local] ${signal}: stopping after the current step, then writing the report`,
-    );
-    controller.abort(new Error(`interrupted by ${signal}`));
-  };
-  process.once('SIGTERM', handler);
-  process.once('SIGINT', handler);
-  controller.signal.addEventListener(
-    'abort',
-    () => {
-      process.removeListener('SIGTERM', handler);
-      process.removeListener('SIGINT', handler);
-    },
-    { once: true },
-  );
-  return controller;
 }
 
 async function runTestConfig(
@@ -328,23 +258,23 @@ async function runTestConfig(
     );
   }
 
-  const controller = abortOnSignal();
-  abortOnHostRequest(controller);
-  const result = await runLocalAgentTestConfigFile(configPath, {
-    signal: controller.signal,
-    onProgress: (message) => console.error(message),
-    /**
-     * Same channel as the task runner: a `[event] {json}` line on stdout, which
-     * is what the host app parses for its progress overlay. Text goes to stderr
-     * so it never competes with the result JSON on stdout.
-     */
-    onEvent: (payload) => {
-      process.stdout.write(`[event] ${JSON.stringify(payload)}\n`);
-    },
-  });
+  return await withRunCancellation(async (signal) => {
+    const result = await runLocalAgentTestConfigFile(configPath, {
+      signal,
+      onProgress: (message) => console.error(message),
+      /**
+       * Same channel as the task runner: a `[event] {json}` line on stdout, which
+       * is what the host app parses for its progress overlay. Text goes to stderr
+       * so it never competes with the result JSON on stdout.
+       */
+      onEvent: (payload) => {
+        process.stdout.write(`[event] ${JSON.stringify(payload)}\n`);
+      },
+    });
 
-  console.log(JSON.stringify(result, null, 2));
-  return result.status === 'success' ? 0 : 1;
+    console.log(JSON.stringify(result, null, 2));
+    return result.status === 'success' ? 0 : 1;
+  });
 }
 
 async function runTest(configPath: string | undefined): Promise<number> {
