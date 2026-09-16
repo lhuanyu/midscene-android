@@ -49,6 +49,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.automirrored.filled.ViewSidebar
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.History
@@ -629,20 +630,41 @@ private fun RunScreen(
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = { startRun(prompt) },
-                        enabled = prompt.isNotBlank() && !busy &&
-                            channelStatus?.ready == true && modelReady,
-                        shape = MaterialTheme.shapes.small,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MidsceneColors.Brand,
-                            contentColor = Color.White,
-                        ),
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.run_start), fontWeight = FontWeight.SemiBold)
+                    // A stop is reachable from three places: this button, the panel on
+                    // the overlay, and the foreground notification. This is the one that
+                    // works without leaving the app.
+                    if (busy) {
+                        Button(
+                            onClick = {
+                                AgentService.start(context, AgentService.ACTION_STOP, Intent())
+                            },
+                            shape = MaterialTheme.shapes.small,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError,
+                            ),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.run_stop), fontWeight = FontWeight.SemiBold)
+                        }
+                    } else {
+                        Button(
+                            onClick = { startRun(prompt) },
+                            enabled = prompt.isNotBlank() &&
+                                channelStatus?.ready == true && modelReady,
+                            shape = MaterialTheme.shapes.small,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MidsceneColors.Brand,
+                                contentColor = Color.White,
+                            ),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.run_start), fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }

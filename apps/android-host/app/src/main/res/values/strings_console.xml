@@ -22,6 +22,7 @@
     <string name="run_instruction_placeholder">For example: Open Settings and search for Wi-Fi</string>
     <string name="run_instruction_input">Instruction input</string>
     <string name="run_start">Run</string>
+    <string name="run_stop">Stop</string>
     <string name="run_last_succeeded">Last run succeeded</string>
     <string name="run_last_failed">Last run reported errors</string>
     <!-- Shown on the Run page only while something a run needs is still missing. -->

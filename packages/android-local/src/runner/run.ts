@@ -25,6 +25,7 @@ import {
 } from '../transport/bridge';
 import { ShellTransport } from '../transport/shell';
 import type { AndroidTransport } from '../transport/types';
+import { attachLocationReporting } from './location-reporting';
 
 const debugRunner = getDebug('android-local:runner');
 
@@ -225,230 +226,6 @@ async function readForegroundPackage(
   }
 }
 
-interface LocatedRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  centerX?: number;
-  centerY?: number;
-}
-
-/**
- * Walk the dump for element rectangles, newest last.
- *
- * The dump shape evolves, so this looks for the fields rather than a fixed path: any
- * object carrying x/y plus width/height (or w/h, or left/top/right/bottom) counts, as
- * does a [x, y] centre.
- */
-/**
- * Copy a live object tree into plain objects.
- *
- * The dump is a tree of class instances, and their data is not reachable the
- * obvious ways: `Object.values` misses prototype getters, and `for...in` — which
- * this used to use — additionally misses non-enumerable properties and private
- * fields. Midscene keeps the located element's geometry behind exactly those, so
- * every dump produced zero rects and the overlay never had a box to draw, in
- * both the task runner and the YAML runner.
- *
- * So walk own property *names* up the prototype chain instead, and read each one
- * through the object rather than the descriptor, which is what invokes getters.
- * `seen` stops a cycle from being walked forever, and the depth cap is the
- * backstop for a tree that is merely very deep.
- */
-function toPlain(
-  node: unknown,
-  depth = 0,
-  seen: WeakSet<object> = new WeakSet(),
-): unknown {
-  if (depth > 12 || node === null || typeof node !== 'object') {
-    return node;
-  }
-  if (seen.has(node)) {
-    return undefined;
-  }
-  seen.add(node);
-
-  if (Array.isArray(node)) {
-    return node.map((item) => toPlain(item, depth + 1, seen));
-  }
-
-  const out: Record<string, unknown> = {};
-  let current: object | null = node;
-  while (current && current !== Object.prototype) {
-    for (const key of Object.getOwnPropertyNames(current)) {
-      if (key === 'constructor' || key in out) {
-        continue;
-      }
-      try {
-        out[key] = toPlain(
-          (node as Record<string, unknown>)[key],
-          depth + 1,
-          seen,
-        );
-      } catch {
-        // a throwing getter is not worth failing the run over
-      }
-    }
-    current = Object.getPrototypeOf(current);
-  }
-  return out;
-}
-
-function collectRects(node: unknown, found: LocatedRect[] = []): LocatedRect[] {
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      collectRects(item, found);
-    }
-    return found;
-  }
-  if (!node || typeof node !== 'object') {
-    return found;
-  }
-
-  const record = node as Record<string, unknown>;
-  const number = (value: unknown): number | undefined =>
-    typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
-  // A located element keeps its rect beside its center. Read them together so
-  // a nested rect does not lose the center or create a second candidate.
-  if (record.rect && typeof record.rect === 'object') {
-    collectRects({ ...record.rect, center: record.center }, found);
-    return found;
-  }
-
-  const x = number(record.x) ?? number(record.left);
-  const y = number(record.y) ?? number(record.top);
-  const w =
-    number(record.width) ??
-    number(record.w) ??
-    (number(record.right) !== undefined && x !== undefined
-      ? (number(record.right) as number) - x
-      : undefined);
-  const h =
-    number(record.height) ??
-    number(record.h) ??
-    (number(record.bottom) !== undefined && y !== undefined
-      ? (number(record.bottom) as number) - y
-      : undefined);
-
-  const center = Array.isArray(record.center) ? record.center : undefined;
-  const centerX = center ? number(center[0]) : undefined;
-  const centerY = center ? number(center[1]) : undefined;
-
-  if (
-    x !== undefined &&
-    y !== undefined &&
-    w !== undefined &&
-    h !== undefined &&
-    w > 0 &&
-    h > 0
-  ) {
-    found.push({ x, y, w, h, centerX, centerY });
-  } else if (centerX !== undefined && centerY !== undefined) {
-    found.push({ x: centerX, y: centerY, w: 0, h: 0, centerX, centerY });
-  }
-
-  for (const value of Object.values(record)) {
-    collectRects(value, found);
-  }
-  return found;
-}
-
-/**
- * Report the located element to the host.
- *
- * Coordinates live in the screenshot the model saw, which Midscene scales by
- * `screenshotShrinkFactor`, so they are multiplied back into screen pixels here (the
- * transport owns the screen geometry; this keeps the mapping next to the config that
- * caused it).
- */
-function attachLocationReporting(
-  agent: { onDumpUpdate?: unknown; addProgressListener?: unknown },
-  shrinkFactor: number | undefined,
-  onEvent: ((event: { type: string; message: string }) => void) | undefined,
-): void {
-  const shrink = shrinkFactor && shrinkFactor > 0 ? shrinkFactor : 1;
-  let lastKey = '';
-  let dumpCount = 0;
-
-  try {
-    // The signature is (tag: string, executionDump?: ExecutionDump): the tree is the
-    // second argument, the first is a label. Walking the label found nothing but the
-    // character indices of a string.
-    agent.onDumpUpdate = (_tag: string, executionDump?: unknown) => {
-      const tree = executionDump;
-      if (!tree) {
-        return;
-      }
-      dumpCount += 1;
-      // Kept deliberately small, but kept: this count is the only way to tell
-      // from a log whether a dump carried geometry at all. It read zero for
-      // every dump in both runners, which is what said the overlay's empty box
-      // was a data problem and not a drawing one.
-      if (dumpCount <= 2) {
-        const plain = toPlain(tree);
-        const tasks = Array.isArray((plain as { tasks?: unknown[] }).tasks)
-          ? ((plain as { tasks: unknown[] }).tasks as unknown[])
-          : [];
-        process.stdout.write(
-          `[event] ${JSON.stringify({
-            event: 'debug.dump',
-            n: dumpCount,
-            rects: collectRects(plain).length,
-            tasks: tasks.map((task) => {
-              const record = (task ?? {}) as Record<string, unknown>;
-              return `${String(record.status)}/${String(record.type)}`;
-            }),
-          })}\n`,
-        );
-      }
-      const rects = collectRects(toPlain(tree));
-      const latest = rects[rects.length - 1];
-      if (!latest) {
-        return;
-      }
-
-      const dump = tree as { id?: string; tasks?: unknown[] };
-      const key = `${dump.id},${dump.tasks?.length},${latest.x},${latest.y},${latest.w},${latest.h}`;
-      if (key === lastKey) {
-        return;
-      }
-      lastKey = key;
-
-      const scale = (value: number) => Math.round(value * shrink);
-      // Point-only models have no element bounds. Draw a fixed-size screen-space
-      // marker centered on the target instead of discarding the location.
-      const rect =
-        latest.w > 0 && latest.h > 0
-          ? {
-              x: scale(latest.x),
-              y: scale(latest.y),
-              w: scale(latest.w),
-              h: scale(latest.h),
-            }
-          : { x: scale(latest.x) - 24, y: scale(latest.y) - 24, w: 48, h: 48 };
-      emitEvent(onEvent, {
-        event: 'locate',
-        rect,
-        screenshot: { x: latest.x, y: latest.y, w: latest.w, h: latest.h },
-        shrink,
-      });
-      if (latest.centerX !== undefined && latest.centerY !== undefined) {
-        emitEvent(onEvent, {
-          event: 'tap',
-          x: scale(latest.centerX),
-          y: scale(latest.centerY),
-        });
-      }
-    };
-  } catch (error) {
-    debugRunner(
-      `location reporting unavailable: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
-
 /** Prompt text of a task, used by the overlay to describe the current step. */
 function promptOf(task: LocalAgentTask): string {
   const candidate = task as { prompt?: unknown; script?: unknown };
@@ -596,7 +373,7 @@ export async function runLocalAgentConfig(
   attachLocationReporting(
     agent,
     config.agent.screenshotShrinkFactor,
-    options.onEvent,
+    (payload) => emitEvent(options.onEvent, payload),
   );
 
   emitEvent(options.onEvent, {
@@ -857,15 +634,11 @@ export async function runLocalAgentTestConfig(
           ...agentOpts,
           reportFileName: `android-test-${runId}`,
         });
-        // Feed the host's overlay from this agent too. Every YAML step goes
-        // through an agent the runner builds itself, so without this the dashed
-        // box and the tap ripple had no events at all and a YAML run looked
-        // like it was doing nothing. The callback argument is unused:
-        // `attachLocationReporting` writes the events to stdout.
+        // Each YAML case owns an agent and reports its resolved task elements.
         attachLocationReporting(
           agent,
           config.agent.screenshotShrinkFactor,
-          undefined,
+          (payload) => emitEvent(undefined, payload),
         );
         return agent;
       },

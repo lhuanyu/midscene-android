@@ -1,0 +1,40 @@
+# Geometry probe: check by eye that the overlay's box lands on the target.
+#
+# The overlay draws in logical (Android display) pixels, but Midscene reports the
+# located element in the coordinates of the *shrunk* screenshot the model saw, so
+# the runner has to scale them by `1 / shrunkShotToLogicalRatio`. Two properties
+# of this config are the point of it:
+#
+#   * `screenshotShrinkFactor: 2` makes that scale 2 instead of the 1 that most
+#     configs use, so a wrong direction (multiplying, or dividing twice) is
+#     visible instead of coincidentally correct;
+#   * the prompt names an element whose bounds are known, so the reported
+#     `[event] locate` rect can be compared with `adb shell uiautomator dump`.
+#
+# Run it from a PC with `midscene-local run examples/geometry-probe.yaml`, and
+# watch for the `locate` line: its `rect` must sit inside the search bar.
+#
+# No `displayId`: it is a *logical* display id, while `screencap -d` wants the
+# SurfaceFlinger display token, so `displayId: 0` silently returns no screenshot.
+name: geometry-probe
+
+device:
+  backend: adb-shell
+  # Set your device: `adb devices`.
+  serial: emulator-5554
+  yadbPath: /data/local/tmp/yadb
+
+agent:
+  generateReport: true
+  reportDir: ./midscene_run/probe-results
+  resetToHome: true
+  screenshotShrinkFactor: 2
+
+tasks:
+  - name: open-settings
+    type: aiAct
+    prompt: 打开系统“设置”应用
+
+  - name: tap-search-field
+    type: aiAct
+    prompt: 点击系统“设置”页面顶部的搜索框

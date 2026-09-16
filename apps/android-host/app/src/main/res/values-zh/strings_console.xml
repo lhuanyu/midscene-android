@@ -22,6 +22,7 @@
     <string name="run_instruction_placeholder">例如：打开设置并搜索 Wi-Fi</string>
     <string name="run_instruction_input">指令输入框</string>
     <string name="run_start">运行</string>
+    <string name="run_stop">停止</string>
     <string name="run_last_succeeded">上次运行成功</string>
     <string name="run_last_failed">上次运行发现错误</string>
     <!-- 只在运行还缺东西时出现在运行页。 -->

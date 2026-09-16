@@ -213,6 +213,26 @@ public final class OverlayView {
         syncStopButton();
     }
 
+    /**
+     * Say on the panel that a stop has been asked for, when the request came from
+     * somewhere other than this layer's own button.
+     *
+     * The button covers the case where the tap happened here. The foreground
+     * notification and the console's Stop button (see AgentService) are the other two
+     * ways in, and a stop asked for from those has to look the same on the panel —
+     * otherwise the request appears to have done nothing until the runner answers.
+     * {@link #setStoppable} clears it again at the start of the next run.
+     */
+    public static synchronized void setStopping(boolean value) {
+        stopping = value;
+        if (stopButton != null) {
+            stopButton.setStopping(value);
+        }
+        if (pill != null) {
+            pill.invalidateVisuals();
+        }
+    }
+
     /** The element the agent located, in screen pixels; drawn until it fades out. */
     public static synchronized void showBox(float x, float y, float width, float height) {
         boxRect = new RectF(x, y, x + width, y + height);

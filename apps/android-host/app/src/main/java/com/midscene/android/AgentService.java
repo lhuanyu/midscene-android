@@ -119,6 +119,13 @@ public class AgentService extends Service {
     private Thread worker;
     private volatile Process activeProcess;
     private volatile boolean stopRequested;
+    /**
+     * Whether the run in flight may be interrupted, and therefore whether the
+     * notification offers the stop action. Provisioning must not offer it: its worker
+     * is what unpacks Node and the agent, and killing it half way leaves a runtime the
+     * next run has to repair.
+     */
+    private volatile boolean stopAllowed;
     private static Thread overlayTicker;
     private RunStore runStore;
 
@@ -184,65 +191,62 @@ public class AgentService extends Service {
     /**
      * Turn one structured event into the pill's three lines: what the agent is
      * doing, which step, and how long it has been at it.
+     *
+     * The JSON reading lives in {@link AgentEvent}, which the JVM tests drive
+     * with the runtime's real output; this method only applies it.
      */
     private static void applyProgressEvent(String json) {
-        try {
-            JSONObject event = new JSONObject(json);
-            String name = event.optString("event", "");
-            switch (name) {
-                case "run.start":
-                    runStartedAtMs = event.optLong("startedAt", System.currentTimeMillis());
-                    stepTotal = event.optInt("total", 0);
-                    stepIndex = 0;
-                    phase = "starting";
-                    break;
-                case "step.start":
-                    phase = event.optString("phase", "acting");
-                    stepIndex = event.optInt("index", 0);
-                    stepTotal = event.optInt("total", stepTotal);
-                    stepPrompt = event.optString("prompt", event.optString("name", ""));
-                    stepStartedAtMs = event.optLong("startedAt", System.currentTimeMillis());
-                    actionTip = "";
-                    break;
-                case "action":
-                    // The finest progress signal there is: a yaml script reports one step
-                    // for its whole flow, so without this the bar sits on 1/1 while five
-                    // actions run underneath it.
-                    actionTip = event.optString("tip", "");
-                    break;
-                case "step.end":
-                    phase = "ok".equals(event.optString("status")) ? "step done" : "step failed";
-                    actionTip = "";
-                    break;
-                case "run.end":
-                    phase = "ok".equals(event.optString("status")) ? "done" : "failed";
-                    actionTip = "";
-                    break;
-                case "locate": {
-                    // Screen-space rect of the element the agent located.
-                    JSONObject rect = event.optJSONObject("rect");
-                    if (rect != null) {
-                        OverlayView.post(() -> OverlayView.showBox(
-                                (float) rect.optDouble("x"),
-                                (float) rect.optDouble("y"),
-                                (float) rect.optDouble("w"),
-                                (float) rect.optDouble("h")));
-                    }
-                    return;
-                }
-                case "tap": {
-                    double x = event.optDouble("x", -1);
-                    double y = event.optDouble("y", -1);
-                    if (x >= 0 && y >= 0) {
-                        OverlayView.post(() -> OverlayView.showRipple((float) x, (float) y));
-                    }
-                    return;
-                }
-                default:
-                    return;
-            }
-        } catch (JSONException error) {
+        AgentEvent event = AgentEvent.parse(json);
+        String name = event.kind;
+        if (name == null) {
             return;
+        }
+        switch (name) {
+            case AgentEvent.RUN_START:
+                runStartedAtMs = event.optLong("startedAt", System.currentTimeMillis());
+                stepTotal = event.optInt("total", 0);
+                stepIndex = 0;
+                phase = "starting";
+                break;
+            case AgentEvent.STEP_START:
+                phase = event.optString("phase", "acting");
+                stepIndex = event.optInt("index", 0);
+                stepTotal = event.optInt("total", stepTotal);
+                stepPrompt = event.optString("prompt", event.optString("name", ""));
+                stepStartedAtMs = event.optLong("startedAt", System.currentTimeMillis());
+                actionTip = "";
+                break;
+            case AgentEvent.ACTION:
+                // The finest progress signal there is: a yaml script reports one step
+                // for its whole flow, so without this the bar sits on 1/1 while five
+                // actions run underneath it.
+                actionTip = event.optString("tip", "");
+                break;
+            case AgentEvent.STEP_END:
+                phase = "ok".equals(event.optString("status")) ? "step done" : "step failed";
+                actionTip = "";
+                break;
+            case AgentEvent.RUN_END:
+                phase = "ok".equals(event.optString("status")) ? "done" : "failed";
+                actionTip = "";
+                break;
+            case AgentEvent.LOCATE: {
+                // Screen-space rect of the element the agent located.
+                AgentEvent.Rect rect = event.locateBox();
+                if (rect != null) {
+                    OverlayView.post(() -> OverlayView.showBox(rect.x, rect.y, rect.w, rect.h));
+                }
+                return;
+            }
+            case AgentEvent.TAP: {
+                AgentEvent.Point point = event.tapPoint();
+                if (point != null) {
+                    OverlayView.post(() -> OverlayView.showRipple(point.x, point.y));
+                }
+                return;
+            }
+            default:
+                return;
         }
 
         if (overlayContext == null) {
@@ -730,9 +734,13 @@ public class AgentService extends Service {
         // Read the switch on every run: a head unit can keep this service alive
         // across a settings change, so the value cannot be cached at startup.
         OverlayView.setShowEnabled(prefs().getBoolean("overlayEnabled", true), this);
-        // Only a task run can be interrupted from the panel: provisioning's worker is what
-        // unpacks Node and the agent, and stopping it half way leaves a broken runtime.
-        OverlayView.setStoppable("prompt".equals(runKind) || "config".equals(runKind));
+        // Provisioning offers no stop control: its worker is what unpacks Node and the
+        // agent, and killing it half way leaves a broken runtime. Only a task run may be
+        // interrupted, and a run can be stopped from three places — the panel on the
+        // overlay, the foreground notification and the console button — so the service
+        // decides once here and every surface follows it.
+        stopAllowed = "prompt".equals(runKind) || "config".equals(runKind);
+        OverlayView.setStoppable(stopAllowed);
         phase = "";
         stepIndex = 0;
         stepTotal = 0;
@@ -764,6 +772,9 @@ public class AgentService extends Service {
                 activeProcess = null;
                 state = "idle";
                 currentTask = "";
+                // The run is over, so the stop action must go with it: an action that
+                // outlives its run is a control that does nothing.
+                stopAllowed = false;
                 releaseWakeLock();
                 updateNotification(getString(R.string.notify_agent_title),
                         getString(R.string.notify_state_idle));
@@ -825,6 +836,10 @@ public class AgentService extends Service {
     }
 
     private void stopCurrentRun() {
+        // Say so on the panel even when there is nothing left to stop: the request
+        // came from the notification, and a press that changes nothing reads as a
+        // control that does not work.
+        OverlayView.setStopping(true);
         if (worker == null || !worker.isAlive()) {
             return;
         }
@@ -928,13 +943,26 @@ public class AgentService extends Service {
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(this, CHANNEL_ID)
                 : new Notification.Builder(this);
-        return builder
-                .setContentTitle(title)
+        builder.setContentTitle(title)
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setOngoing(isBusy())
-                .setContentIntent(contentIntent)
-                .build();
+                .setContentIntent(contentIntent);
+
+        // The stop control. It is here rather than floating over the screen because a
+        // notification action is reachable from any app and cannot touch input routing;
+        // see the note at the call site in runAsync.
+        if (stopAllowed && isBusy() && !stopRequested) {
+            Intent stop = new Intent(this, AgentService.class).setAction(ACTION_STOP);
+            PendingIntent stopIntent = PendingIntent.getService(
+                    this, 1, stop,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            builder.addAction(new Notification.Action.Builder(
+                    android.R.drawable.ic_menu_close_clear_cancel,
+                    getString(R.string.progress_stop),
+                    stopIntent).build());
+        }
+        return builder.build();
     }
 
     private void updateNotification(String title, String text) {

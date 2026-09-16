@@ -25,7 +25,10 @@ import {
 } from 'midscene-android';
 
 const transport = new AdbShellTransport({ serial: 'emulator-5554' });
-const device = await LocalAndroidDevice.create(transport, { displayId: 0 });
+// Omit `displayId` to capture the default display. It is a logical display id,
+// while `screencap -d` takes a SurfaceFlinger display token, so `displayId: 0`
+// makes the screenshot come back empty.
+const device = await LocalAndroidDevice.create(transport);
 
 try {
   const agent = new Agent(device, { generateReport: false });
