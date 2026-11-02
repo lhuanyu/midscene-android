@@ -45,7 +45,7 @@
     "@midscene/shared": "1.12.7",
     "@midscene/test": "1.12.7",
     "js-yaml": "4.3.2",
-    "zod": "^3.25.1"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@microsoft/api-extractor": "^7.52.10",
